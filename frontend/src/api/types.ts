@@ -78,3 +78,40 @@ export interface PreviewResult {
 export interface Settings {
   default_goals_to_win: number;
 }
+
+export interface RatingHistoryPoint {
+  match_id: number;
+  created_at: string;
+  rating_after: number;
+  rating_delta: number;
+}
+
+export interface WLRecord {
+  wins: number;
+  losses: number;
+}
+
+export interface UserStats {
+  user: User;
+  history: {
+    attacker: RatingHistoryPoint[];
+    defender: RatingHistoryPoint[];
+    singles: RatingHistoryPoint[];
+  };
+  totals: {
+    attacker: WLRecord;
+    defender: WLRecord;
+    singles: WLRecord;
+  };
+  top_partners: { user_id: number; games: number }[];
+  top_opponents: { user_id: number; games: number }[];
+}
+
+export interface GlobalStats {
+  total_matches: number;
+  doubles_matches: number;
+  singles_matches: number;
+  active_players: number;
+}
+
+export type LeaderboardMode = 'attacker' | 'defender' | 'singles';

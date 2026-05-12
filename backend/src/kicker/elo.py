@@ -17,7 +17,7 @@ from itertools import combinations
 from typing import Literal
 
 K_FACTOR = 32.0
-INITIAL_RATING = 1000.0
+INITIAL_RATING = 1600.0
 
 Position = Literal["attacker", "defender", "singles"]
 

@@ -10,6 +10,7 @@ from .routers import auth as auth_router
 from .routers import balance as balance_router
 from .routers import matches as matches_router
 from .routers import settings_router
+from .routers import stats as stats_router
 from .routers import users as users_router
 
 
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(matches_router.router)
     app.include_router(balance_router.router)
     app.include_router(settings_router.router)
+    app.include_router(stats_router.router)
     return app
 
 

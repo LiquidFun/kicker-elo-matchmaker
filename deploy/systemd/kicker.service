@@ -1,0 +1,34 @@
+[Unit]
+Description=Kicker Elo backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kicker
+Group=kicker
+WorkingDirectory=/opt/kicker/backend
+EnvironmentFile=/opt/kicker/backend/.env
+ExecStart=/opt/kicker/backend/.venv/bin/uvicorn kicker.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/kicker/backend
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

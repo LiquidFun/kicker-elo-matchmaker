@@ -44,12 +44,12 @@ def test_doubles_match_updates_ratings_and_is_zero_sum(admin_client, four_player
     assert sum(deltas) == pytest.approx(0.0)
 
     users = {u["id"]: u for u in admin_client.get("/api/users").json()}
-    assert users[a]["rating_attacker"] > 1000
-    assert users[a]["rating_defender"] == 1000  # untouched
-    assert users[a]["rating_singles"] == 1000  # untouched
-    assert users[b]["rating_defender"] > 1000
-    assert users[c]["rating_attacker"] < 1000
-    assert users[d]["rating_defender"] < 1000
+    assert users[a]["rating_attacker"] > 1600
+    assert users[a]["rating_defender"] == 1600  # untouched
+    assert users[a]["rating_singles"] == 1600  # untouched
+    assert users[b]["rating_defender"] > 1600
+    assert users[c]["rating_attacker"] < 1600
+    assert users[d]["rating_defender"] < 1600
     assert users[a]["games_attacker"] == 1
     assert users[a]["games_defender"] == 0
 
@@ -71,10 +71,10 @@ def test_singles_match_only_touches_singles(admin_client, two_players):
     )
     assert r.status_code == 201, r.text
     users = {u["id"]: u for u in admin_client.get("/api/users").json()}
-    assert users[e]["rating_singles"] > 1000
-    assert users[f]["rating_singles"] < 1000
-    assert users[e]["rating_attacker"] == 1000
-    assert users[e]["rating_defender"] == 1000
+    assert users[e]["rating_singles"] > 1600
+    assert users[f]["rating_singles"] < 1600
+    assert users[e]["rating_attacker"] == 1600
+    assert users[e]["rating_defender"] == 1600
 
 
 def test_score_must_match_goals_to_win(admin_client, two_players):
@@ -195,8 +195,8 @@ def test_match_delete_reverts_ratings(admin_client, four_players):
     assert r.status_code == 204
     users = {u["id"]: u for u in admin_client.get("/api/users").json()}
     for uid in four_players:
-        assert users[uid]["rating_attacker"] == 1000
-        assert users[uid]["rating_defender"] == 1000
+        assert users[uid]["rating_attacker"] == 1600
+        assert users[uid]["rating_defender"] == 1600
         assert users[uid]["games_attacker"] == 0
         assert users[uid]["games_defender"] == 0
 

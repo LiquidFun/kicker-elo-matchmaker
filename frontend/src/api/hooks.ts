@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from './client';
 import type {
   BalanceResult,
+  GlobalStats,
+  LeaderboardMode,
   Match,
   MatchPlayerInput,
   Mode,
@@ -9,6 +11,7 @@ import type {
   Settings,
   User,
   UserCreateResult,
+  UserStats,
 } from './types';
 
 export const useMe = () =>
@@ -149,3 +152,21 @@ export const useUpdateSettings = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 };
+
+export const useLeaderboard = (mode: LeaderboardMode) =>
+  useQuery({
+    queryKey: ['leaderboard', mode],
+    queryFn: () => api.get<User[]>(`/api/stats/leaderboard?mode=${mode}`),
+  });
+
+export const useUserStats = (userId: number) =>
+  useQuery({
+    queryKey: ['user-stats', userId],
+    queryFn: () => api.get<UserStats>(`/api/stats/users/${userId}`),
+  });
+
+export const useGlobalStats = () =>
+  useQuery({
+    queryKey: ['global-stats'],
+    queryFn: () => api.get<GlobalStats>('/api/stats/global'),
+  });

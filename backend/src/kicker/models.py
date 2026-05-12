@@ -32,9 +32,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default="user")
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
-    rating_attacker: Mapped[float] = mapped_column(default=1000.0)
-    rating_defender: Mapped[float] = mapped_column(default=1000.0)
-    rating_singles: Mapped[float] = mapped_column(default=1000.0)
+    rating_attacker: Mapped[float] = mapped_column(default=1600.0)
+    rating_defender: Mapped[float] = mapped_column(default=1600.0)
+    rating_singles: Mapped[float] = mapped_column(default=1600.0)
     games_attacker: Mapped[int] = mapped_column(default=0)
     games_defender: Mapped[int] = mapped_column(default=0)
     games_singles: Mapped[int] = mapped_column(default=0)
