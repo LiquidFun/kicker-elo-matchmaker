@@ -38,13 +38,13 @@ export default function RosterTile({
       {...drag.listeners}
       {...drag.attributes}
       className={`
-        flex flex-col items-center gap-1 rounded-xl p-2 touch-none
-        ${inLineup ? 'opacity-40' : 'active:bg-white/10'}
+        flex flex-col items-center gap-1 rounded-xl p-2 touch-none text-ink ring-1 ring-line bg-surface
+        ${inLineup ? 'opacity-40' : 'active:bg-paper'}
       `}
     >
       <Avatar user={user} size="md" />
       <div className="max-w-[64px] truncate text-[11px] leading-tight">{user.display_name}</div>
-      <div className="text-[10px] text-white/50">{Math.round(rating)}</div>
+      <div className="text-[10px] text-ink2">{Math.round(rating)}</div>
     </button>
   );
 }

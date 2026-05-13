@@ -1,3 +1,6 @@
+import hashlib
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -113,6 +116,23 @@ def issue_password_link(
 
 
 password_router = APIRouter(prefix="/api/password", tags=["password"])
+
+
+@password_router.get("/lookup")
+def lookup_password_token(token: str, db: Session = Depends(get_db)) -> schemas.UserOut:
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    row = db.get(models.PasswordSetToken, token_hash)
+    now = datetime.now(timezone.utc)
+    if (
+        row is None
+        or row.used_at is not None
+        or row.expires_at.replace(tzinfo=timezone.utc) < now
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+    user = db.get(models.User, row.user_id)
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return schemas.UserOut.from_user(user)
 
 
 @password_router.post("/set")

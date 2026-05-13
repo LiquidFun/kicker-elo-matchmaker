@@ -1,8 +1,9 @@
 import type { User } from '../api/types';
 
+// Warm, light-ish palette so the dark text on top stays readable.
 const COLORS = [
-  '#5b8def', '#7c5bef', '#ef5b8d', '#ef5b5b', '#ef8d5b',
-  '#efc25b', '#a3ef5b', '#5bef8d', '#5befcc', '#5bccef',
+  '#c9a36c', '#d9b27a', '#e0c896', '#efc25b', '#ef8d5b',
+  '#ef5b5b', '#ef5b8d', '#a3ef5b', '#5bef8d', '#d4a574',
 ];
 
 function hashColor(s: string): string {
@@ -40,7 +41,7 @@ export default function Avatar({
 
   return (
     <div
-      className={`${dim} flex items-center justify-center rounded-full font-semibold text-pitch2 ${className}`}
+      className={`${dim} flex items-center justify-center rounded-full font-semibold text-pitch ${className}`}
       style={{ background: hashColor(user.username) }}
     >
       {initials(user.display_name)}

@@ -99,6 +99,15 @@ export const useSetPassword = () =>
       api.post<{ ok: boolean }>('/api/password/set', vars),
   });
 
+export const usePasswordTokenLookup = (token: string | null) =>
+  useQuery({
+    queryKey: ['password-lookup', token],
+    queryFn: () =>
+      api.get<User>(`/api/password/lookup?token=${encodeURIComponent(token!)}`),
+    enabled: !!token,
+    retry: false,
+  });
+
 export const useMatches = (userId?: number, limit = 50) =>
   useQuery({
     queryKey: ['matches', { userId, limit }],

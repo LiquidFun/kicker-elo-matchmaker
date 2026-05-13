@@ -16,14 +16,14 @@ export default function AdminUsersPage() {
   const [link, setLink] = useState<string | null>(null);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3">
-        <div className="text-sm text-white/60">{usersQ.data?.length ?? 0} users</div>
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-line bg-paper p-3">
+        <div className="text-sm text-ink2">{usersQ.data?.length ?? 0} Benutzer</div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="rounded-lg bg-rail px-3 py-1.5 text-sm font-semibold text-pitch2"
+          className="rounded-lg bg-pitch px-3 py-1.5 text-sm font-semibold text-white"
         >
-          + New user
+          + Neuer Benutzer
         </button>
       </div>
 
@@ -39,31 +39,18 @@ export default function AdminUsersPage() {
         onLink={setLink}
       />
 
-      <Modal open={link !== null} onClose={() => setLink(null)} title="Password set link">
-        <p className="mb-2 text-sm text-white/70">
-          Share this single-use link. It expires in 72 hours.
+      <Modal open={link !== null} onClose={() => setLink(null)} title="Passwort-Link">
+        <p className="mb-2 text-sm text-ink2">
+          Diesen einmaligen Link teilen. Gültig 72 Stunden.
         </p>
         <textarea
           readOnly
           value={link ?? ''}
           rows={3}
-          className="w-full rounded-lg bg-pitch2 p-2 text-sm font-mono outline-none ring-1 ring-white/10"
+          className="w-full rounded-lg bg-paper p-2 text-sm font-mono text-ink outline-none ring-1 ring-line"
           onFocus={(e) => e.currentTarget.select()}
         />
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={() => link && navigator.clipboard?.writeText(link)}
-            className="flex-1 rounded-lg bg-rail py-2 font-semibold text-pitch2"
-          >
-            Copy
-          </button>
-          <button
-            onClick={() => setLink(null)}
-            className="flex-1 rounded-lg bg-pitch2 py-2 ring-1 ring-white/10"
-          >
-            Close
-          </button>
-        </div>
+        <ShareButtons link={link} onClose={() => setLink(null)} />
       </Modal>
     </div>
   );
@@ -80,7 +67,12 @@ function UserRow({
   const link = useResetPasswordLink();
 
   function onDelete() {
-    if (!confirm(`Delete ${user.display_name}? Past matches will be preserved.`)) return;
+    if (
+      !confirm(
+        `${user.display_name} löschen? Vergangene Spiele bleiben erhalten.`,
+      )
+    )
+      return;
     del.mutate(user.id);
   }
 
@@ -91,23 +83,23 @@ function UserRow({
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-white/5 px-3 py-3">
+    <div className="flex items-center gap-3 border-b border-line bg-surface px-3 py-3">
       <Avatar user={user} size="md" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">
           {user.display_name}
           {user.role === 'admin' && (
-            <span className="ml-2 rounded bg-rail/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-rail">
+            <span className="ml-2 rounded bg-pitch px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
               admin
             </span>
           )}
           {!user.has_password && (
-            <span className="ml-2 text-[10px] uppercase tracking-wider text-white/40">
-              guest
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-ink2">
+              gast
             </span>
           )}
         </div>
-        <div className="truncate text-xs text-white/40">
+        <div className="truncate text-xs text-ink2">
           @{user.username}
           {user.email && ` · ${user.email}`}
         </div>
@@ -115,14 +107,14 @@ function UserRow({
       <button
         onClick={onResetLink}
         disabled={link.isPending}
-        className="rounded-md bg-pitch2 px-2 py-1 text-xs ring-1 ring-white/10 disabled:opacity-50"
+        className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
       >
-        {link.isPending ? '…' : user.has_password ? 'Reset' : 'Link'}
+        {link.isPending ? '…' : user.has_password ? 'Zurücks.' : 'Link'}
       </button>
       <button
         onClick={onDelete}
         disabled={del.isPending}
-        className="rounded-md bg-pitch2 px-2 py-1 text-xs text-red-300 ring-1 ring-white/10 disabled:opacity-50"
+        className="rounded-md bg-paper px-2 py-1 text-xs text-red-600 ring-1 ring-line disabled:opacity-50"
       >
         ×
       </button>
@@ -185,10 +177,10 @@ function CreateUserModal({
         reset();
         onClose();
       }}
-      title="New user"
+      title="Neuer Benutzer"
     >
       <form onSubmit={submit} className="space-y-3">
-        <Field label="Username (login id)">
+        <Field label="Benutzername (Anmelde-ID)">
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -198,14 +190,14 @@ function CreateUserModal({
             required
           />
         </Field>
-        <Field label="Display name (optional, defaults to username)">
+        <Field label="Anzeigename (optional, sonst Benutzername)">
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className="input"
           />
         </Field>
-        <Field label="Email (optional)">
+        <Field label="E-Mail (optional)">
           <input
             type="email"
             value={email}
@@ -214,7 +206,7 @@ function CreateUserModal({
             autoComplete="off"
           />
         </Field>
-        <Field label="Password (optional — leave blank to create a guest)">
+        <Field label="Passwort (optional — leer = Gast)">
           <input
             type="password"
             value={password}
@@ -223,49 +215,49 @@ function CreateUserModal({
             autoComplete="new-password"
           />
         </Field>
-        <Field label="Role">
-          <div className="flex rounded-lg bg-pitch2 p-0.5">
+        <Field label="Rolle">
+          <div className="flex rounded-lg bg-paper p-0.5 ring-1 ring-line">
             <button
               type="button"
               onClick={() => setRole('user')}
               className={`flex-1 rounded-md py-1.5 text-sm ${
-                role === 'user' ? 'bg-rail text-pitch2 font-semibold' : 'text-white/70'
+                role === 'user' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
               }`}
             >
-              User
+              Benutzer
             </button>
             <button
               type="button"
               onClick={() => setRole('admin')}
               className={`flex-1 rounded-md py-1.5 text-sm ${
-                role === 'admin' ? 'bg-rail text-pitch2 font-semibold' : 'text-white/70'
+                role === 'admin' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
               }`}
             >
               Admin
             </button>
           </div>
         </Field>
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={create.isPending}
-          className="w-full rounded-lg bg-rail py-2 font-semibold text-pitch2 disabled:opacity-50"
+          className="w-full rounded-lg bg-pitch py-2 font-semibold text-white disabled:opacity-50"
         >
-          {create.isPending ? 'Creating…' : 'Create'}
+          {create.isPending ? 'Erstellt …' : 'Erstellen'}
         </button>
       </form>
       <style>{`
         .input {
           width: 100%;
-          background: #143020;
-          color: white;
+          background: #f7f3ea;
+          color: #1c1c1c;
           border-radius: 8px;
           padding: 8px 12px;
           outline: none;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+          box-shadow: inset 0 0 0 1px #e7e0cf;
         }
         .input:focus {
-          box-shadow: inset 0 0 0 1px #c9a36c;
+          box-shadow: inset 0 0 0 1px #1a3d2e;
         }
       `}</style>
     </Modal>
@@ -275,8 +267,69 @@ function CreateUserModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-white/60">{label}</span>
+      <span className="mb-1 block text-xs text-ink2">{label}</span>
       {children}
     </label>
+  );
+}
+
+function ShareButtons({ link, onClose }: { link: string | null; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const canShare =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.share === 'function';
+
+  async function onCopy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function onShare() {
+    if (!link) return;
+    try {
+      await navigator.share({
+        title: 'Kicker — Passwort festlegen',
+        text: 'Passwort für Kicker festlegen:',
+        url: link,
+      });
+    } catch {
+      // user cancelled — ignore
+    }
+  }
+
+  return (
+    <div className="mt-3 flex gap-2">
+      {canShare && (
+        <button
+          onClick={onShare}
+          className="flex-1 rounded-lg bg-pitch py-2 font-semibold text-white"
+        >
+          Teilen
+        </button>
+      )}
+      <button
+        onClick={onCopy}
+        className={`flex-1 rounded-lg py-2 font-semibold ${
+          canShare
+            ? 'bg-surface text-ink ring-1 ring-line'
+            : 'bg-pitch text-white'
+        }`}
+      >
+        {copied ? 'Kopiert ✓' : 'Kopieren'}
+      </button>
+      <button
+        onClick={onClose}
+        className="rounded-lg bg-surface px-4 py-2 text-ink ring-1 ring-line"
+        aria-label="Schließen"
+      >
+        ✕
+      </button>
+    </div>
   );
 }

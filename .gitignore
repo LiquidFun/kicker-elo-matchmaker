@@ -25,3 +25,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Local runtime
+logs/

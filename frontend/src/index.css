@@ -16,3 +16,22 @@ body {
 button {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Override Tailwind preflight's default ring color (was blue-500 / 50%). */
+*,
+::before,
+::after {
+  --tw-ring-color: #e7e0cf;
+}
+
+/* Kill the browser-default blue focus outline (kept only for keyboard nav). */
+button:focus,
+a:focus,
+[role="button"]:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid #1a3d2e;
+  outline-offset: 1px;
+}

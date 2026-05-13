@@ -8,40 +8,40 @@ export default function AppLayout({ user }: { user: User }) {
 
   const navItem =
     'flex-1 py-3 text-center text-sm font-medium border-t-2 border-transparent';
-  const navActive = 'border-rail text-white';
-  const navInactive = 'text-white/60';
+  const navActive = 'border-pitch text-ink';
+  const navInactive = 'text-ink2';
 
   return (
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>
-      <nav className="flex border-t border-white/10 bg-pitch2 pb-[env(safe-area-inset-bottom)]">
+      <nav className="flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
         <NavLink
           to="/"
           end
           className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
         >
-          Match
+          Spiel
         </NavLink>
         <NavLink
           to="/stats"
           className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
         >
-          Stats
+          Statistik
         </NavLink>
         {user.role === 'admin' && (
           <NavLink
             to="/admin/users"
             className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
           >
-            Admin
+            Verwaltung
           </NavLink>
         )}
         <button
           onClick={() => logout.mutate()}
           className={`${navItem} ${navInactive}`}
-          aria-label="Sign out"
+          aria-label="Abmelden"
         >
           {user.display_name.split(' ')[0]} ↗
         </button>

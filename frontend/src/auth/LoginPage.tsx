@@ -25,36 +25,36 @@ export default function LoginPage() {
     <div className="flex h-full items-center justify-center px-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-xs space-y-4 rounded-2xl bg-pitch p-6 shadow-2xl"
+        className="w-full max-w-xs space-y-4 rounded-2xl bg-surface p-6 shadow-lg ring-1 ring-line"
       >
-        <h1 className="text-center text-2xl font-bold">Kicker</h1>
+        <h1 className="text-center text-2xl font-bold text-pitch">Kicker</h1>
         <div>
-          <label className="mb-1 block text-sm text-white/70">Username</label>
+          <label className="mb-1 block text-sm text-ink2">Benutzername</label>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full rounded-lg bg-pitch2 px-3 py-2 text-white outline-none ring-1 ring-white/10 focus:ring-rail"
+            className="w-full rounded-lg bg-paper px-3 py-2 text-ink outline-none ring-1 ring-line focus:ring-pitch"
             autoComplete="username"
             autoFocus
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm text-white/70">Password</label>
+          <label className="mb-1 block text-sm text-ink2">Passwort</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg bg-pitch2 px-3 py-2 text-white outline-none ring-1 ring-white/10 focus:ring-rail"
+            className="w-full rounded-lg bg-paper px-3 py-2 text-ink outline-none ring-1 ring-line focus:ring-pitch"
             autoComplete="current-password"
           />
         </div>
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={login.isPending}
-          className="w-full rounded-lg bg-rail py-2 font-semibold text-pitch2 disabled:opacity-50"
+          className="w-full rounded-lg bg-pitch py-2 font-semibold text-white disabled:opacity-50"
         >
-          {login.isPending ? 'Signing in…' : 'Sign in'}
+          {login.isPending ? 'Anmeldung …' : 'Anmelden'}
         </button>
       </form>
     </div>

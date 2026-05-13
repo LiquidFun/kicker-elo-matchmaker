@@ -15,7 +15,7 @@ export default function App() {
 
   if (me.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-white/70">Loading…</div>
+      <div className="flex h-full items-center justify-center text-ink2">Lädt …</div>
     );
   }
 

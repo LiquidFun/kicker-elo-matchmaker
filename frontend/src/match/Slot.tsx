@@ -1,26 +1,34 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
-import type { User } from '../api/types';
+import type { Mode, User } from '../api/types';
 import Avatar from './Avatar';
 import type { SlotKey } from './store';
 
 const POSITION_LABEL: Record<SlotKey, string> = {
-  'team1.attacker': 'Attacker',
-  'team1.defender': 'Defender',
-  'team2.attacker': 'Attacker',
-  'team2.defender': 'Defender',
-  'team1.singles': 'Player',
-  'team2.singles': 'Player',
+  'team1.attacker': 'Sturm',
+  'team1.defender': 'Abwehr',
+  'team2.attacker': 'Sturm',
+  'team2.defender': 'Abwehr',
+  'team1.singles': 'Spieler',
+  'team2.singles': 'Spieler',
 };
+
+function activePosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' {
+  if (slot.endsWith('.attacker')) return 'attacker';
+  if (slot.endsWith('.defender')) return 'defender';
+  return 'singles';
+}
 
 export default function Slot({
   slotKey,
   user,
+  mode,
   onTap,
 }: {
   slotKey: SlotKey;
   user: User | null;
+  mode: Mode;
   onTap: () => void;
 }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `slot:${slotKey}` });
@@ -34,18 +42,26 @@ export default function Slot({
     ? { transform: CSS.Translate.toString(drag.transform), zIndex: 50 }
     : undefined;
 
+  const active = activePosition(slotKey);
+
   return (
     <button
       type="button"
       ref={setDropRef}
       onClick={onTap}
       className={`
-        flex w-full flex-col items-center gap-1 rounded-2xl border-2 border-dashed p-2
-        transition-colors
-        ${isOver ? 'border-rail bg-rail/20' : user ? 'border-white/30 bg-pitch/60' : 'border-white/15 bg-pitch/30'}
+        flex w-full flex-col items-center gap-1 rounded-2xl border p-2 text-ink
+        backdrop-blur-md transition-colors
+        ${
+          isOver
+            ? 'border-pitch bg-paper/80 ring-2 ring-pitch'
+            : user
+              ? 'border-line bg-surface/80 shadow-sm'
+              : 'border-dashed border-line bg-surface/60'
+        }
       `}
     >
-      <div className="text-[10px] uppercase tracking-wider text-white/50">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-pitch">
         {POSITION_LABEL[slotKey]}
       </div>
       <div
@@ -58,14 +74,43 @@ export default function Slot({
         {user ? (
           <>
             <Avatar user={user} size="md" />
-            <div className="max-w-[70px] truncate text-xs">{user.display_name}</div>
+            <div className="max-w-[80px] truncate text-xs text-ink">
+              {user.display_name}
+            </div>
+            {mode === 'doubles' ? (
+              <div className="flex gap-2 text-[10px] tabular-nums leading-none">
+                <RatingPair
+                  label="S"
+                  value={user.rating_attacker}
+                  active={active === 'attacker'}
+                />
+                <RatingPair
+                  label="A"
+                  value={user.rating_defender}
+                  active={active === 'defender'}
+                />
+              </div>
+            ) : (
+              <div className="text-[10px] font-semibold tabular-nums leading-none text-ink">
+                {Math.round(user.rating_singles)}
+              </div>
+            )}
           </>
         ) : (
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-2xl text-white/40">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-paper text-2xl text-pitch ring-1 ring-line">
             +
           </div>
         )}
       </div>
     </button>
+  );
+}
+
+function RatingPair({ label, value, active }: { label: string; value: number; active: boolean }) {
+  return (
+    <span className={active ? 'font-semibold text-ink' : 'text-ink2'}>
+      <span className={`mr-0.5 ${active ? 'text-pitch' : 'text-ink2'}`}>{label}</span>
+      {Math.round(value)}
+    </span>
   );
 }
