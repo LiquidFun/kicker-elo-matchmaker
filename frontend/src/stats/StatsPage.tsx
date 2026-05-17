@@ -14,6 +14,12 @@ import { useGlobalStats, useMatches, useUsers } from '../api/hooks';
 import type { LeaderboardMode, Match, User } from '../api/types';
 import Avatar from '../match/Avatar';
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 const MODE_TABS: { mode: LeaderboardMode; label: string }[] = [
   { mode: 'attacker', label: 'Sturm' },
   { mode: 'defender', label: 'Abwehr' },
@@ -50,6 +56,17 @@ export default function StatsPage() {
     });
   }, [usersQ.data]);
 
+  const activeInMode = useMemo(() => {
+    const gamesKey = `games_${chartMode}` as const;
+    return players.filter((p) => p[gamesKey] > 0);
+  }, [players, chartMode]);
+
+  const colorByUserId = useMemo(() => {
+    const m = new Map<number, string>();
+    activeInMode.forEach((p, i) => m.set(p.id, LINE_COLORS[i % LINE_COLORS.length]));
+    return m;
+  }, [activeInMode]);
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto">
       {globalQ.data && (
@@ -60,7 +77,7 @@ export default function StatsPage() {
         </div>
       )}
 
-      <Leaderboard players={players} />
+      <Leaderboard players={players} colorByUserId={colorByUserId} />
 
       <div className="px-3 pt-4">
         <div className="mb-2 flex items-center justify-between">
@@ -69,8 +86,9 @@ export default function StatsPage() {
         </div>
         <ProgressionChart
           mode={chartMode}
-          players={players}
+          activePlayers={activeInMode}
           matches={matchesQ.data ?? []}
+          colorByUserId={colorByUserId}
         />
       </div>
     </div>
@@ -86,7 +104,13 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Leaderboard({ players }: { players: User[] }) {
+function Leaderboard({
+  players,
+  colorByUserId,
+}: {
+  players: User[];
+  colorByUserId: Map<number, string>;
+}) {
   if (players.length === 0) {
     return (
       <div className="px-3 pt-2 text-sm text-ink2">Keine Benutzer.</div>
@@ -101,21 +125,29 @@ function Leaderboard({ players }: { players: User[] }) {
           <div className="w-12 text-right">Abwehr</div>
           <div className="w-12 text-right">Einzel</div>
         </div>
-        {players.map((u) => (
-          <Link
-            to={`/stats/users/${u.id}`}
-            key={u.id}
-            className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 border-b border-line px-3 py-2 last:border-b-0 active:bg-paper"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Avatar user={u} size="sm" />
-              <div className="min-w-0 flex-1 truncate text-sm">{u.display_name}</div>
-            </div>
-            <RatingCell rating={u.rating_attacker} games={u.games_attacker} />
-            <RatingCell rating={u.rating_defender} games={u.games_defender} />
-            <RatingCell rating={u.rating_singles} games={u.games_singles} />
-          </Link>
-        ))}
+        {players.map((u) => {
+          const color = colorByUserId.get(u.id);
+          return (
+            <Link
+              to={`/stats/users/${u.id}`}
+              key={u.id}
+              className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 border-b border-line px-3 py-2 last:border-b-0 active:bg-paper"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Avatar user={u} size="sm" />
+                <div
+                  className="min-w-0 flex-1 truncate text-sm font-medium"
+                  style={color ? { color } : undefined}
+                >
+                  {u.display_name}
+                </div>
+              </div>
+              <RatingCell rating={u.rating_attacker} games={u.games_attacker} />
+              <RatingCell rating={u.rating_defender} games={u.games_defender} />
+              <RatingCell rating={u.rating_singles} games={u.games_singles} />
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
@@ -159,16 +191,18 @@ function ModePicker({
 
 function ProgressionChart({
   mode,
-  players,
+  activePlayers,
   matches,
+  colorByUserId,
 }: {
   mode: LeaderboardMode;
-  players: User[];
+  activePlayers: User[];
   matches: Match[];
+  colorByUserId: Map<number, string>;
 }) {
-  const { data, activePlayers } = useMemo(
-    () => buildProgressionSeries(mode, players, matches),
-    [mode, players, matches],
+  const data = useMemo(
+    () => buildProgressionSeries(mode, activePlayers, matches),
+    [mode, activePlayers, matches],
   );
 
   if (activePlayers.length === 0) {
@@ -179,11 +213,13 @@ function ProgressionChart({
     );
   }
 
+  const lastIdx = data.length - 1;
+
   return (
     <div>
       <div className="h-56 rounded-xl bg-surface p-2 ring-1 ring-line">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={data} margin={{ top: 8, right: 28, bottom: 4, left: 0 }}>
             <CartesianGrid stroke="#e7e0cf" />
             <XAxis dataKey="idx" hide />
             <YAxis
@@ -199,43 +235,79 @@ function ProgressionChart({
                 return [Math.round(Number(value)), p?.display_name ?? name];
               }}
             />
-            {activePlayers.map((p, i) => (
-              <Line
-                key={p.id}
-                type="monotone"
-                dataKey={String(p.id)}
-                stroke={LINE_COLORS[i % LINE_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-              />
-            ))}
+            {activePlayers.map((p) => {
+              const color = colorByUserId.get(p.id) ?? '#888';
+              return (
+                <Line
+                  key={p.id}
+                  type="monotone"
+                  dataKey={String(p.id)}
+                  stroke={color}
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                  connectNulls
+                  dot={(props: { cx?: number; cy?: number; index?: number; key?: string }) => {
+                    const { cx, cy, index, key } = props;
+                    if (index !== lastIdx || cx == null || cy == null) {
+                      return <g key={key ?? `dot-${p.id}-${index}`} />;
+                    }
+                    return (
+                      <EndAvatar
+                        key={key ?? `end-${p.id}`}
+                        cx={cx}
+                        cy={cy}
+                        color={color}
+                        user={p}
+                      />
+                    );
+                  }}
+                />
+              );
+            })}
           </LineChart>
         </ResponsiveContainer>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        {activePlayers.map((p, i) => (
-          <span key={p.id} className="inline-flex items-center gap-1">
-            <span
-              className="h-2 w-3 rounded-sm"
-              style={{ background: LINE_COLORS[i % LINE_COLORS.length] }}
-            />
-            <span className="text-ink2">{p.display_name}</span>
-          </span>
-        ))}
       </div>
     </div>
   );
 }
 
+function EndAvatar({
+  cx,
+  cy,
+  color,
+  user,
+}: {
+  cx: number;
+  cy: number;
+  color: string;
+  user: User;
+}) {
+  const r = 8;
+  const x = cx + 4;
+  return (
+    <g>
+      <circle cx={x} cy={cy} r={r + 1} fill="#ffffff" stroke={color} strokeWidth={1.5} />
+      <text
+        x={x}
+        y={cy}
+        textAnchor="middle"
+        dy="0.34em"
+        fontSize={8}
+        fontWeight={700}
+        fill={color}
+      >
+        {initials(user.display_name)}
+      </text>
+    </g>
+  );
+}
+
 function buildProgressionSeries(
   mode: LeaderboardMode,
-  players: User[],
+  activePlayers: User[],
   matches: Match[],
 ) {
-  const gamesKey = (`games_${mode}` as const);
-  const activePlayers = players.filter((p) => p[gamesKey] > 0);
-  if (activePlayers.length === 0) return { data: [], activePlayers };
+  if (activePlayers.length === 0) return [];
 
   const matchMode = mode === 'singles' ? 'singles' : 'doubles';
   const relevant = matches
@@ -282,5 +354,5 @@ function buildProgressionSeries(
     idx++;
   }
 
-  return { data, activePlayers };
+  return data;
 }

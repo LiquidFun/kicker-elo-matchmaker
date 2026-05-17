@@ -78,7 +78,7 @@ export default function Slot({
               {user.display_name}
             </div>
             {mode === 'doubles' ? (
-              <div className="flex gap-2 text-[10px] tabular-nums leading-none">
+              <div className="flex flex-col items-center gap-0.5 text-[10px] tabular-nums leading-none">
                 <RatingPair
                   label="S"
                   value={user.rating_attacker}

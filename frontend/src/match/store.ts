@@ -23,6 +23,14 @@ export const slotsForMode = (mode: Mode): SlotKey[] =>
 interface MatchState {
   mode: Mode;
   slots: Record<SlotKey, number | null>;
+  // Per-placed-player arrival sequence (lower = older). Used to pick the
+  // eviction victim when a 5th player is tapped into a full lineup.
+  arrival: Record<number, number>;
+  nextSeq: number;
+  // True once the lineup has been full at least once since the last reset.
+  // The first time the lineup fills up, arrivals are randomly shuffled so the
+  // initial four are evicted in random order rather than placement order.
+  settled: boolean;
   setMode: (mode: Mode) => void;
   place: (slot: SlotKey, userId: number) => void;
   unplace: (slot: SlotKey) => void;
@@ -56,53 +64,133 @@ const firstEmpty = (slots: Record<SlotKey, number | null>, active: SlotKey[]): S
   return null;
 };
 
+export const isLineupComplete = (
+  slots: Record<SlotKey, number | null>,
+  mode: Mode,
+): boolean => slotsForMode(mode).every((k) => slots[k] !== null);
+
+function normalize(
+  slots: Record<SlotKey, number | null>,
+  arrival: Record<number, number>,
+  nextSeq: number,
+  settled: boolean,
+  mode: Mode,
+): Pick<MatchState, 'slots' | 'arrival' | 'nextSeq' | 'settled'> {
+  if (Object.values(slots).every((v) => v === null)) {
+    return { slots, arrival: {}, nextSeq: 0, settled: false };
+  }
+  if (!settled && isLineupComplete(slots, mode)) {
+    const placed = slotsForMode(mode).map((k) => slots[k]!);
+    for (let i = placed.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [placed[i], placed[j]] = [placed[j], placed[i]];
+    }
+    const shuffled: Record<number, number> = {};
+    placed.forEach((uid, i) => {
+      shuffled[uid] = i;
+    });
+    return { slots, arrival: shuffled, nextSeq: placed.length, settled: true };
+  }
+  return { slots, arrival, nextSeq, settled };
+}
+
 export const useMatchStore = create<MatchState>((set) => ({
   mode: 'doubles',
   slots: { ...emptySlots },
+  arrival: {},
+  nextSeq: 0,
+  settled: false,
 
   setMode: (mode) =>
     set(() => ({
       mode,
       slots: { ...emptySlots },
+      arrival: {},
+      nextSeq: 0,
+      settled: false,
     })),
 
   place: (slot, userId) =>
     set((s) => {
       const current = findSlotOfPlayer(s.slots, userId);
-      const next = { ...s.slots };
-      if (current) next[current] = null;
-      next[slot] = userId;
-      return { slots: next };
+      const displaced = s.slots[slot];
+      const slots = { ...s.slots };
+      const arrival = { ...s.arrival };
+      let nextSeq = s.nextSeq;
+
+      if (current) slots[current] = null;
+      slots[slot] = userId;
+
+      if (displaced !== null && displaced !== userId) delete arrival[displaced];
+      if (!(userId in arrival)) arrival[userId] = nextSeq++;
+
+      return normalize(slots, arrival, nextSeq, s.settled, s.mode);
     }),
 
   unplace: (slot) =>
-    set((s) => ({ slots: { ...s.slots, [slot]: null } })),
+    set((s) => {
+      const uid = s.slots[slot];
+      const slots = { ...s.slots, [slot]: null };
+      const arrival = { ...s.arrival };
+      if (uid !== null) delete arrival[uid];
+      return normalize(slots, arrival, s.nextSeq, s.settled, s.mode);
+    }),
 
   togglePlayer: (userId) =>
     set((s) => {
       const current = findSlotOfPlayer(s.slots, userId);
       if (current) {
-        return { slots: { ...s.slots, [current]: null } };
+        const slots = { ...s.slots, [current]: null };
+        const arrival = { ...s.arrival };
+        delete arrival[userId];
+        return normalize(slots, arrival, s.nextSeq, s.settled, s.mode);
       }
-      const target = firstEmpty(s.slots, slotsForMode(s.mode));
-      if (!target) return s;
-      return { slots: { ...s.slots, [target]: userId } };
+      const empty = firstEmpty(s.slots, slotsForMode(s.mode));
+      if (empty) {
+        const slots = { ...s.slots, [empty]: userId };
+        const arrival = { ...s.arrival, [userId]: s.nextSeq };
+        return normalize(slots, arrival, s.nextSeq + 1, s.settled, s.mode);
+      }
+      // Lineup full — evict the player with the oldest arrival.
+      const placed = slotsForMode(s.mode).map((k) => s.slots[k]!);
+      const victim = placed.reduce(
+        (min, uid) => ((s.arrival[uid] ?? 0) < (s.arrival[min] ?? 0) ? uid : min),
+        placed[0],
+      );
+      const victimSlot = findSlotOfPlayer(s.slots, victim)!;
+      const slots = { ...s.slots, [victimSlot]: userId };
+      const arrival = { ...s.arrival };
+      delete arrival[victim];
+      arrival[userId] = s.nextSeq;
+      return normalize(slots, arrival, s.nextSeq + 1, s.settled, s.mode);
     }),
 
   swap: (a, b) =>
     set((s) => {
-      const next = { ...s.slots };
-      [next[a], next[b]] = [next[b], next[a]];
-      return { slots: next };
+      const slots = { ...s.slots };
+      [slots[a], slots[b]] = [slots[b], slots[a]];
+      return { slots };
     }),
 
-  reset: () => set(() => ({ slots: { ...emptySlots } })),
+  reset: () =>
+    set(() => ({
+      slots: { ...emptySlots },
+      arrival: {},
+      nextSeq: 0,
+      settled: false,
+    })),
 
   setLineup: (assignments) =>
-    set(() => ({ slots: { ...emptySlots, ...assignments } })),
+    set((s) => {
+      const slots = { ...emptySlots, ...assignments };
+      const placedNow = new Set(
+        Object.values(slots).filter((v): v is number => typeof v === 'number'),
+      );
+      const arrival: Record<number, number> = {};
+      let nextSeq = s.nextSeq;
+      for (const uid of placedNow) {
+        arrival[uid] = uid in s.arrival ? s.arrival[uid] : nextSeq++;
+      }
+      return normalize(slots, arrival, nextSeq, s.settled, s.mode);
+    }),
 }));
-
-export const isLineupComplete = (
-  slots: Record<SlotKey, number | null>,
-  mode: Mode,
-): boolean => slotsForMode(mode).every((k) => slots[k] !== null);

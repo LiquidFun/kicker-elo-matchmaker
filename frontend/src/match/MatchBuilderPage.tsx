@@ -12,12 +12,14 @@ import {
 import {
   useBalance,
   useCreateMatch,
+  useMatches,
   useMe,
   usePreview,
   useSettings,
   useUsers,
 } from '../api/hooks';
 import type { MatchPlayerInput, Mode, User } from '../api/types';
+import Modal from '../components/Modal';
 import RosterTile from './RosterTile';
 import SessionHistory from './SessionHistory';
 import SettingsModal from './SettingsModal';
@@ -58,11 +60,33 @@ export default function MatchBuilderPage() {
   const setLineup = useMatchStore((s) => s.setLineup);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsToWin, setGoalsToWin] = useState<number | null>(null);
   const [loserTeam, setLoserTeam] = useState<1 | 2 | null>(null);
   const [loserScore, setLoserScore] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionStart] = useState(() => new Date().toISOString());
+
+  const matchesQ = useMatches(undefined, 50);
+  const sessionMatchCount = useMemo(
+    () => (matchesQ.data ?? []).filter((m) => m.created_at >= sessionStart).length,
+    [matchesQ.data, sessionStart],
+  );
+
+  // Capture the first non-empty match snapshot to derive a stable "recently
+  // played" roster order. Frozen after first load so the list doesn't reshuffle
+  // when matches are committed during the session.
+  const initialLastPlayedRef = useRef<Map<number, string> | null>(null);
+  if (initialLastPlayedRef.current === null && matchesQ.data) {
+    const m = new Map<number, string>();
+    for (const match of matchesQ.data) {
+      for (const p of match.players) {
+        const prev = m.get(p.user_id);
+        if (!prev || match.created_at > prev) m.set(p.user_id, match.created_at);
+      }
+    }
+    initialLastPlayedRef.current = m;
+  }
 
   const effectiveGoalsToWin = goalsToWin ?? settingsQ.data?.default_goals_to_win ?? 5;
 
@@ -85,10 +109,14 @@ export default function MatchBuilderPage() {
     if (!slotsForMode(mode).includes(targetSlot)) return;
     const aid = String(e.active.id);
     if (aid.startsWith('roster:')) {
+      lastInteractionRef.current = 'drag';
       place(targetSlot, Number(aid.slice('roster:'.length)));
     } else if (aid.startsWith('slot-drag:')) {
       const sourceSlot = aid.slice('slot-drag:'.length) as SlotKey;
-      if (sourceSlot !== targetSlot) swap(sourceSlot, targetSlot);
+      if (sourceSlot !== targetSlot) {
+        lastInteractionRef.current = 'drag';
+        swap(sourceSlot, targetSlot);
+      }
     }
   }
 
@@ -112,13 +140,20 @@ export default function MatchBuilderPage() {
     );
   }
 
-  const sortedUsers = useMemo(
-    () =>
-      [...(usersQ.data ?? [])].sort((a, b) =>
-        a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' }),
-      ),
-    [usersQ.data],
-  );
+  const sortedUsers = useMemo(() => {
+    const users = usersQ.data ?? [];
+    const lastPlayed = initialLastPlayedRef.current;
+    return [...users].sort((a, b) => {
+      const la = lastPlayed?.get(a.id);
+      const lb = lastPlayed?.get(b.id);
+      if (la && lb && la !== lb) return lb.localeCompare(la);
+      if (la && !lb) return -1;
+      if (!la && lb) return 1;
+      return a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' });
+    });
+    // initialLastPlayedRef is intentionally not a dep — frozen after first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersQ.data, matchesQ.data]);
 
   const complete = isLineupComplete(slots, mode);
   const winProb = winProbTeam1(usersById, slots, mode);
@@ -127,10 +162,13 @@ export default function MatchBuilderPage() {
   // "balanced" = within 5 percentage points of 50/50 win probability.
   const isBalanced = winProb !== null && Math.abs(winProb - 0.5) < 0.05;
 
-  // Auto-balance once: when the set of 4 doubles players changes & is complete.
+  // Auto-balance only after a tap (which doesn't choose a position). Dragging
+  // a player to a specific slot is an explicit role assignment — leave it.
+  const lastInteractionRef = useRef<'tap' | 'drag'>('tap');
   const lastAutoBalancedIds = useRef<string>('');
   useEffect(() => {
     if (mode !== 'doubles' || !complete) return;
+    if (lastInteractionRef.current !== 'tap') return;
     const ids = slotsForMode('doubles')
       .map((k) => slots[k])
       .filter((v): v is number => v != null)
@@ -173,14 +211,17 @@ export default function MatchBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playersKey, effectiveGoalsToWin, mode, complete, refreshKey]);
 
-  function lookupTeamDelta(team: 1 | 2, lScore: number): number | undefined {
+  function lookupTeamDelta(
+    losingTeam: 1 | 2,
+    loserScore: number,
+    deltaForTeam: 1 | 2 = losingTeam,
+  ): number | undefined {
     if (!preview.data) return undefined;
-    const t1 = team === 1 ? lScore : effectiveGoalsToWin;
-    const t2 = team === 2 ? lScore : effectiveGoalsToWin;
+    const t1 = losingTeam === 1 ? loserScore : effectiveGoalsToWin;
+    const t2 = losingTeam === 2 ? loserScore : effectiveGoalsToWin;
     const o = preview.data.outcomes.find((x) => x.team1_score === t1 && x.team2_score === t2);
     if (!o) return undefined;
-    // any player on the losing team has the team's delta
-    const teamPlayers = players.filter((p) => p.team === team);
+    const teamPlayers = players.filter((p) => p.team === deltaForTeam);
     return teamPlayers.length > 0 ? o.deltas[teamPlayers[0].user_id] : undefined;
   }
 
@@ -242,35 +283,55 @@ export default function MatchBuilderPage() {
             onBalance={onBalance}
             onOpenSettings={() => setSettingsOpen(true)}
             onSlotTap={(slot) => {
-              if (slots[slot] != null) unplace(slot);
+              if (slots[slot] != null) {
+                lastInteractionRef.current = 'tap';
+                unplace(slot);
+              }
             }}
             onPickScore={pickScore}
+            complete={complete}
+            isSet={isSet}
+            team1Score={team1Score}
+            team2Score={team2Score}
+            isCommitting={commit.isPending}
+            onCommit={commitMatch}
           />
 
-          {complete && (
-            <CommitBar
-              isSet={isSet}
-              team1Score={team1Score}
-              team2Score={team2Score}
-              isPending={commit.isPending}
-              onCommit={commitMatch}
-              onReset={() => {
-                setLoserTeam(null);
-                setLoserScore(null);
-              }}
-              error={commit.isError ? (commit.error as Error).message : null}
-            />
+          {commit.isError && (
+            <p className="text-sm text-red-600">{(commit.error as Error).message}</p>
           )}
         </div>
+
+        <button
+          onClick={() => setHistoryOpen(true)}
+          className="flex w-full items-center justify-between border-t border-line bg-paper px-3 py-3 text-left text-sm text-ink2 md:px-6"
+        >
+          <span className="flex items-center gap-2">
+            <HistoryIcon />
+            <span>Verlauf {sessionMatchCount > 0 && `• ${sessionMatchCount}`}</span>
+          </span>
+          <span aria-hidden className="text-ink2">›</span>
+        </button>
 
         <Roster
           users={sortedUsers}
           slots={slots}
           mode={mode}
-          onTap={(u) => togglePlayer(u.id)}
+          onTap={(u) => {
+            lastInteractionRef.current = 'tap';
+            togglePlayer(u.id);
+          }}
         />
 
-        <SessionHistory sessionStart={sessionStart} usersById={usersById} />
+        <Modal
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          title="Diese Sitzung"
+        >
+          <div className="-mx-1 max-h-[70vh] overflow-y-auto">
+            <SessionHistory sessionStart={sessionStart} usersById={usersById} />
+          </div>
+        </Modal>
 
         <SettingsModal
           open={settingsOpen}
@@ -305,6 +366,12 @@ function Pitch({
   onOpenSettings,
   onSlotTap,
   onPickScore,
+  complete,
+  isSet,
+  team1Score,
+  team2Score,
+  isCommitting,
+  onCommit,
 }: {
   mode: Mode;
   slots: Record<SlotKey, number | null>;
@@ -312,7 +379,11 @@ function Pitch({
   goalsToWin: number;
   loserTeam: 1 | 2 | null;
   loserScore: number | null;
-  lookupTeamDelta: (team: 1 | 2, loserScore: number) => number | undefined;
+  lookupTeamDelta: (
+    losingTeam: 1 | 2,
+    loserScore: number,
+    deltaForTeam?: 1 | 2,
+  ) => number | undefined;
   team1Rating: number | null;
   team2Rating: number | null;
   isBalanced: boolean;
@@ -322,6 +393,12 @@ function Pitch({
   onOpenSettings: () => void;
   onSlotTap: (slot: SlotKey) => void;
   onPickScore: (team: 1 | 2, score: number) => void;
+  complete: boolean;
+  isSet: boolean;
+  team1Score: number;
+  team2Score: number;
+  isCommitting: boolean;
+  onCommit: () => void;
 }) {
   const balanceBg = !canBalance
     ? 'bg-surface text-ink2 ring-line'
@@ -349,7 +426,7 @@ function Pitch({
           onPick={(s) => onPickScore(1, s)}
         />
 
-        <div className="flex flex-1 items-stretch gap-2 px-1 py-3">
+        <div className="flex flex-1 items-stretch gap-3 px-1 py-3">
           <TeamColumn
             team={1}
             mode={mode}
@@ -359,7 +436,7 @@ function Pitch({
             isWinner={loserTeam === 2}
             onSlotTap={onSlotTap}
           />
-          <div className="flex w-20 shrink-0 flex-col items-center justify-center gap-3 md:w-32 md:gap-4">
+          <div className="flex w-20 shrink-0 flex-col items-center py-8 md:w-32">
             {mode === 'doubles' && (
               <button
                 onClick={onBalance}
@@ -371,6 +448,28 @@ function Pitch({
                 {isBalancing ? <span className="text-xs font-bold">…</span> : <ScalesIcon />}
               </button>
             )}
+            <div className="flex-[2.5]" aria-hidden />
+            <button
+              onClick={onCommit}
+              disabled={!complete || !isSet || isCommitting}
+              className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 shadow-lg transition-colors disabled:cursor-not-allowed ${
+                complete && isSet
+                  ? 'bg-pitch text-white ring-2 ring-pitch'
+                  : 'bg-surface text-ink2 ring-1 ring-line opacity-60'
+              }`}
+              aria-label="Speichern"
+              title="Speichern"
+            >
+              <span className="text-xl font-bold tabular-nums md:text-2xl">
+                {complete && isSet ? `${team1Score} : ${team2Score}` : '— : —'}
+              </span>
+              {isCommitting ? (
+                <span className="text-xs font-bold">…</span>
+              ) : (
+                <CheckIcon />
+              )}
+            </button>
+            <div className="flex-1" aria-hidden />
             <button
               onClick={onOpenSettings}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-pitch shadow ring-1 ring-line md:h-12 md:w-12"
@@ -418,6 +517,42 @@ function SettingsIcon() {
     >
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v5h5" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-6 w-6 md:h-7 md:w-7"
+    >
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
@@ -510,10 +645,15 @@ function ScoreColumn({
   goalsToWin: number;
   loserTeam: 1 | 2 | null;
   loserScore: number | null;
-  lookupTeamDelta: (team: 1 | 2, loserScore: number) => number | undefined;
+  lookupTeamDelta: (
+    losingTeam: 1 | 2,
+    loserScore: number,
+    deltaForTeam?: 1 | 2,
+  ) => number | undefined;
   onPick: (score: number) => void;
 }) {
   const losingThisTeam = loserTeam === team;
+  const winningThisTeam = loserTeam !== null && loserTeam !== team;
   return (
     <div className="flex w-12 shrink-0 flex-col gap-1 px-1 py-3 md:w-14">
       {Array.from({ length: goalsToWin }, (_, score) => {
@@ -547,52 +687,23 @@ function ScoreColumn({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function CommitBar({
-  isSet,
-  team1Score,
-  team2Score,
-  isPending,
-  onCommit,
-  onReset,
-  error,
-}: {
-  isSet: boolean;
-  team1Score: number;
-  team2Score: number;
-  isPending: boolean;
-  onCommit: () => void;
-  onReset: () => void;
-  error: string | null;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onCommit}
-          disabled={!isSet || isPending}
-          className="flex-1 rounded-xl bg-pitch py-3 font-semibold text-white disabled:opacity-40"
-        >
-          {isPending
-            ? 'Speichert…'
-            : isSet
-              ? `Speichern ${team1Score} : ${team2Score}`
-              : 'Tippe einen Punktestand'}
-        </button>
-        {isSet && (
-          <button
-            onClick={onReset}
-            className="rounded-xl bg-surface px-4 py-3 text-sm text-ink2 ring-1 ring-line"
-            aria-label="Zurücksetzen"
+      {winningThisTeam && loserTeam !== null && loserScore !== null && (() => {
+        const delta = lookupTeamDelta(loserTeam, loserScore, team);
+        return (
+          <div
+            aria-label={`${goalsToWin} Tore`}
+            className="relative flex flex-1 items-center justify-center rounded-lg bg-pitch text-lg font-bold tabular-nums text-white shadow-sm ring-2 ring-pitch"
           >
-            ✕
-          </button>
-        )}
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+            <span>{goalsToWin}</span>
+            {delta !== undefined && (
+              <span className="absolute right-0.5 top-0.5 text-[9px] font-bold tabular-nums leading-none text-white">
+                {delta >= 0 ? '+' : ''}
+                {Math.round(delta)}
+              </span>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
