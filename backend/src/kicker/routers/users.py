@@ -19,6 +19,8 @@ _IMAGE_MAGIC: list[tuple[bytes, str]] = [
     (b"\xff\xd8\xff", "jpg"),
 ]
 
+_AVATAR_URL_PREFIX = "/api/avatars/"
+
 
 def _sniff_image(data: bytes) -> str | None:
     for prefix, ext in _IMAGE_MAGIC:
@@ -27,6 +29,19 @@ def _sniff_image(data: bytes) -> str | None:
     if len(data) >= 12 and data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "webp"
     return None
+
+
+def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
+    """Best-effort delete of a stored avatar. No-op for external URLs or missing files."""
+    if not url or not url.startswith(_AVATAR_URL_PREFIX):
+        return
+    filename = url[len(_AVATAR_URL_PREFIX):]
+    if "/" in filename or filename in ("", ".", ".."):
+        return
+    try:
+        (Path(storage_dir) / "avatars" / filename).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 @router.get("")
@@ -87,16 +102,21 @@ def update_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
     if payload.name is not None and actor.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change name")
+    # exclude_unset = honor explicit nulls (e.g. clearing the avatar) but ignore
+    # fields the client didn't send at all.
+    provided = payload.model_dump(exclude_unset=True)
+    previous_avatar = target.avatar_url
     for field in ("name", "avatar_url", "role"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(target, field, value)
+        if field in provided:
+            setattr(target, field, provided[field])
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Name already exists") from None
     db.refresh(target)
+    if "avatar_url" in provided and previous_avatar != target.avatar_url:
+        _delete_avatar_file(previous_avatar, get_settings().storage_dir)
     return schemas.UserOut.from_user(target)
 
 
@@ -169,9 +189,11 @@ def upload_avatar(
     filename = f"{secrets.token_hex(16)}.{ext}"
     (avatars_dir / filename).write_bytes(data)
 
-    target.avatar_url = f"/api/avatars/{filename}"
+    previous = target.avatar_url
+    target.avatar_url = f"{_AVATAR_URL_PREFIX}{filename}"
     db.commit()
     db.refresh(target)
+    _delete_avatar_file(previous, settings.storage_dir)
     return schemas.UserOut.from_user(target)
 
 

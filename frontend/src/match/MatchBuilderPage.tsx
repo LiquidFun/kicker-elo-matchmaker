@@ -5,6 +5,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
+  useDndContext,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -98,7 +99,7 @@ export default function MatchBuilderPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 60, tolerance: 20 } }),
     useSensor(KeyboardSensor),
   );
 
@@ -719,8 +720,14 @@ function Roster({
   mode: Mode;
   onTap: (u: User) => void;
 }) {
+  const { active } = useDndContext();
+  const dragging = active !== null;
   return (
-    <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-line bg-paper px-2 py-2 md:max-h-[34%]">
+    <div
+      className={`max-h-[40%] shrink-0 border-t border-line bg-paper px-2 py-2 md:max-h-[34%] ${
+        dragging ? 'overflow-hidden' : 'overflow-y-auto'
+      }`}
+    >
       <div className="mx-auto grid max-w-5xl grid-cols-4 gap-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
         {users.map((u) => (
           <RosterTile

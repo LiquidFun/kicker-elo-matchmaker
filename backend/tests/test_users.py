@@ -181,3 +181,44 @@ def test_avatar_rejects_non_image(client, admin_client, admin_user):
         files={"file": ("evil.txt", b"hello", "text/plain")},
     )
     assert r.status_code == 415
+
+
+def test_avatar_remove_clears_field_and_deletes_file(admin_client, admin_user):
+    import os
+    from kicker.config import get_settings
+
+    r = admin_client.post(
+        f"/api/users/{admin_user.id}/avatar",
+        files={"file": ("a.png", _PNG_1X1, "image/png")},
+    )
+    url = r.json()["avatar_url"]
+    filename = url.rsplit("/", 1)[-1]
+    path = os.path.join(get_settings().storage_dir, "avatars", filename)
+    assert os.path.exists(path)
+
+    r = admin_client.patch(f"/api/users/{admin_user.id}", json={"avatar_url": None})
+    assert r.status_code == 200
+    assert r.json()["avatar_url"] is None
+    assert not os.path.exists(path)
+
+
+def test_avatar_reupload_deletes_previous(admin_client, admin_user):
+    import os
+    from kicker.config import get_settings
+
+    r = admin_client.post(
+        f"/api/users/{admin_user.id}/avatar",
+        files={"file": ("a.png", _PNG_1X1, "image/png")},
+    )
+    old_file = r.json()["avatar_url"].rsplit("/", 1)[-1]
+    old_path = os.path.join(get_settings().storage_dir, "avatars", old_file)
+    assert os.path.exists(old_path)
+
+    r = admin_client.post(
+        f"/api/users/{admin_user.id}/avatar",
+        files={"file": ("b.png", _PNG_1X1, "image/png")},
+    )
+    new_file = r.json()["avatar_url"].rsplit("/", 1)[-1]
+    assert new_file != old_file
+    assert not os.path.exists(old_path)
+    assert os.path.exists(os.path.join(get_settings().storage_dir, "avatars", new_file))
