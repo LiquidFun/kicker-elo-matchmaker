@@ -50,16 +50,16 @@ jobs:
             --exclude '.venv' --exclude '__pycache__' --exclude '*.db' \
             --exclude '*.db-shm' --exclude '*.db-wal' \
             --exclude 'tests' --exclude 'storage' \
-            backend/ "deploy@$SSH_HOST:/srv/kicker/backend/"
+            backend/ "deploy-kicker@$SSH_HOST:/srv/kicker/backend/"
 
       - name: Rsync frontend build
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          rsync -az --delete frontend/dist/ "deploy@$SSH_HOST:/srv/kicker/frontend/dist/"
+          rsync -az --delete frontend/dist/ "deploy-kicker@$SSH_HOST:/srv/kicker/frontend/dist/"
 
       - name: Install backend deps and restart service
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          ssh "deploy@$SSH_HOST" "cd /srv/kicker/backend && uv sync && sudo systemctl restart kicker"
+          ssh "deploy-kicker@$SSH_HOST" "cd /srv/kicker/backend && uv sync && sudo systemctl restart kicker"
