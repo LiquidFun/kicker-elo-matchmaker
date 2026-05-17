@@ -12,7 +12,6 @@ from kicker.elo import (
     doubles_deltas,
     enumerate_doubles_lineups,
     expected_score,
-    mov_multiplier,
     preview_outcomes,
     singles_deltas,
 )
@@ -29,18 +28,6 @@ def test_expected_score_equal_is_half():
 def test_expected_score_400_diff_is_91_percent():
     # Classic Elo: +400 rating ≈ 10x win probability ≈ 0.909
     assert expected_score(1400, 1000) == pytest.approx(10.0 / 11.0, abs=1e-3)
-
-
-def test_mov_multiplier_monotonic_in_goal_diff():
-    vals = [mov_multiplier(d, 0) for d in range(1, 10)]
-    assert vals == sorted(vals)
-
-
-def test_mov_multiplier_damps_favored_blowouts():
-    # Winning 5-0 as a heavy favorite should yield smaller mov than as the underdog.
-    fav = mov_multiplier(5, 400)   # favorite won by 5
-    upset = mov_multiplier(5, -400)  # underdog won by 5
-    assert upset > fav
 
 
 def test_compute_delta_zero_sum_doubles():
@@ -137,20 +124,37 @@ def test_preview_singles_only_two_players():
         assert set(per_user.keys()) == {1, 2}
 
 
-def test_delta_magnitude_bounded_by_k_times_mov():
-    # Sanity: |delta| ≤ K * mov_multiplier (since |actual - expected| ≤ 1)
+def test_delta_magnitude_bounded_by_k():
+    # |actual - expected| ≤ 1, so |delta| ≤ K.
     for ra, rb, sa, sb in [(1000, 1000, 5, 0), (1500, 800, 5, 4), (700, 1500, 5, 1)]:
-        d = compute_delta(ra, rb, sa, sb)
-        winner_diff = (ra - rb) if sa > sb else (rb - ra)
-        mov = mov_multiplier(abs(sa - sb), winner_diff)
-        assert abs(d) <= K_FACTOR * mov + 1e-9
+        assert abs(compute_delta(ra, rb, sa, sb)) <= K_FACTOR + 1e-9
 
 
-def test_mov_zero_goal_diff_returns_one():
-    # Tie defense — shouldn't occur in this app but the formula should be safe.
-    assert mov_multiplier(0, 0) == 1.0
-    # Tie delta is exactly zero at equal ratings.
+def test_zero_zero_is_safe_and_tie_at_equal_ratings_is_zero():
+    # 0-0 shouldn't happen but the formula must not divide by zero.
+    assert compute_delta(1000, 1000, 0, 0) == pytest.approx(0.0)
+    # 5-5 is also a tie; equal-rated players see no movement.
     assert compute_delta(1000, 1000, 5, 5) == pytest.approx(0.0)
+
+
+def test_underdog_gains_when_losing_close():
+    # 1900 vs 1500, underdog loses 4-5. Expected for the underdog is ~0.091,
+    # actual is 4/9 ≈ 0.444 → underdog gains rating despite losing.
+    delta_underdog = compute_delta(1500, 1900, 4, 5)
+    assert delta_underdog > 0
+
+
+def test_favorite_loses_when_barely_winning():
+    # 1900 vs 1500, favorite wins 5-4. Expected 0.909, actual 5/9 ≈ 0.556 →
+    # favorite drops rating because they were supposed to win by more.
+    delta_favorite = compute_delta(1900, 1500, 5, 4)
+    assert delta_favorite < 0
+
+
+def test_underdog_still_loses_on_blowout():
+    # 1900 vs 1500, underdog gets shut out 0-5 — actual 0 < expected 0.091.
+    delta_underdog = compute_delta(1500, 1900, 0, 5)
+    assert delta_underdog < 0
 
 
 def test_realistic_rating_progression():

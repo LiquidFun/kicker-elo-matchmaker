@@ -7,17 +7,25 @@ Rating model:
 - A doubles match updates only the position rating each player used; singles
   ratings are untouched, and vice versa.
 - Updates are zero-sum within a match: side A's total delta equals -(side B's).
+- "Actual" is goal-ratio score_a/(score_a+score_b), not binary win/loss — so a
+  heavy underdog who keeps the score close still gains rating, and a favorite
+  who barely scrapes a win can lose rating. This matches the legacy system's
+  feel where dominant teams couldn't farm easy wins.
 """
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Literal
 
 K_FACTOR = 32.0
 INITIAL_RATING = 1600.0
+# Blend of binary win and goal-ratio. Tuned so the strongest doubles pair on
+# our roster (~200 rating-point gap over the weakest) can still gain rating
+# on a close 4-5 loss; pure binary would never allow that, pure goal-ratio
+# would shrink balanced 5-4 deltas to ~1.8.
+WIN_WEIGHT = 0.2
 
 Position = Literal["attacker", "defender", "singles"]
 
@@ -27,27 +35,16 @@ def expected_score(rating_a: float, rating_b: float) -> float:
     return 1.0 / (1.0 + 10.0 ** ((rating_b - rating_a) / 400.0))
 
 
-def mov_multiplier(goal_diff: int, rating_diff: float) -> float:
-    """538-style margin-of-victory weight.
-
-    `rating_diff` is signed: positive when the winner was favored. The
-    denominator damps blowouts by stronger favorites (so beating a much
-    weaker opponent 5-0 grants less than upsetting a much stronger one).
-    """
-    if goal_diff <= 0:
-        return 1.0
-    return math.log(goal_diff + 1.0) * (2.2 / (0.001 * rating_diff + 2.2))
-
-
 def compute_delta(
     rating_a: float, rating_b: float, score_a: int, score_b: int, k: float = K_FACTOR
 ) -> float:
     """Delta applied to side A's rating. Side B gets the negation."""
-    actual = 1.0 if score_a > score_b else 0.0 if score_a < score_b else 0.5
+    total = score_a + score_b
+    ratio = 0.5 if total == 0 else score_a / total
+    binary = 1.0 if score_a > score_b else 0.0 if score_a < score_b else 0.5
+    actual = WIN_WEIGHT * binary + (1.0 - WIN_WEIGHT) * ratio
     expected = expected_score(rating_a, rating_b)
-    winner_rating_diff = (rating_a - rating_b) if score_a > score_b else (rating_b - rating_a)
-    mov = mov_multiplier(abs(score_a - score_b), winner_rating_diff)
-    return k * mov * (actual - expected)
+    return k * (actual - expected)
 
 
 @dataclass(frozen=True)
