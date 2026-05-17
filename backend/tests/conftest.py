@@ -1,8 +1,10 @@
 import os
+import tempfile
 
 os.environ["KICKER_DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["KICKER_SECRET_KEY"] = "test-secret"
 os.environ["KICKER_PUBLIC_BASE_URL"] = "http://test"
+os.environ["KICKER_STORAGE_DIR"] = tempfile.mkdtemp(prefix="kicker-test-")
 
 import pytest
 from fastapi.testclient import TestClient

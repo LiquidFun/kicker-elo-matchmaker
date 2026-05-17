@@ -34,7 +34,7 @@ export default function App() {
         <Route index element={<MatchBuilderPage />} />
         <Route path="stats" element={<StatsPage />} />
         <Route path="stats/users/:userId" element={<UserProfilePage />} />
-        {user?.role === 'admin' && <Route path="admin/users" element={<AdminUsersPage />} />}
+        <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

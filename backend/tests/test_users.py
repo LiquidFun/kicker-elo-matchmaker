@@ -88,3 +88,96 @@ def test_admin_can_change_role(admin_client):
     r = admin_client.patch(f"/api/users/{uid}", json={"role": "admin"})
     assert r.status_code == 200
     assert r.json()["role"] == "admin"
+
+
+def test_non_admin_cannot_change_own_name(client, admin_client):
+    r = admin_client.post("/api/users", json={"name": "Renamer", "password": "pw12345678"})
+    uid = r.json()["user"]["id"]
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "Renamer", "password": "pw12345678"})
+    r = admin_client.patch(f"/api/users/{uid}", json={"name": "Hacked"})
+    assert r.status_code == 403
+
+
+def test_self_password_change_requires_current(client, admin_client):
+    r = admin_client.post("/api/users", json={"name": "Pwch", "password": "oldpw12345"})
+    uid = r.json()["user"]["id"]
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "Pwch", "password": "oldpw12345"})
+
+    # missing current_password
+    r = admin_client.post(f"/api/users/{uid}/password", json={"new_password": "newpw12345"})
+    assert r.status_code == 401
+
+    # wrong current_password
+    r = admin_client.post(
+        f"/api/users/{uid}/password",
+        json={"current_password": "wrong", "new_password": "newpw12345"},
+    )
+    assert r.status_code == 401
+
+    # correct current_password
+    r = admin_client.post(
+        f"/api/users/{uid}/password",
+        json={"current_password": "oldpw12345", "new_password": "newpw12345"},
+    )
+    assert r.status_code == 200
+
+    # can now log in with new password
+    admin_client.post("/api/auth/logout")
+    r = admin_client.post("/api/auth/login", json={"name": "Pwch", "password": "newpw12345"})
+    assert r.status_code == 200
+
+
+def test_admin_can_set_password_without_current(admin_client):
+    r = admin_client.post("/api/users", json={"name": "Forced", "password": "oldpw12345"})
+    uid = r.json()["user"]["id"]
+    r = admin_client.post(
+        f"/api/users/{uid}/password", json={"new_password": "freshpw12345"}
+    )
+    assert r.status_code == 200
+
+
+_PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc\xfc\xff\xff?\x00\x05\xfe\x02\xfe\xa3\xb6\xe5\xc7"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def test_self_avatar_upload(client, admin_client):
+    r = admin_client.post("/api/users", json={"name": "Pic", "password": "pw12345678"})
+    uid = r.json()["user"]["id"]
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "Pic", "password": "pw12345678"})
+
+    r = admin_client.post(
+        f"/api/users/{uid}/avatar",
+        files={"file": ("a.png", _PNG_1X1, "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["avatar_url"].startswith("/api/avatars/")
+    assert body["avatar_url"].endswith(".png")
+
+
+def test_non_admin_cannot_upload_other_avatar(client, admin_client):
+    r = admin_client.post("/api/users", json={"name": "U1", "password": "pw12345678"})
+    other = admin_client.post("/api/users", json={"name": "U2", "password": "pw12345678"})
+    other_id = other.json()["user"]["id"]
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "U1", "password": "pw12345678"})
+    r = admin_client.post(
+        f"/api/users/{other_id}/avatar",
+        files={"file": ("a.png", _PNG_1X1, "image/png")},
+    )
+    assert r.status_code == 403
+
+
+def test_avatar_rejects_non_image(client, admin_client, admin_user):
+    r = admin_client.post(
+        f"/api/users/{admin_user.id}/avatar",
+        files={"file": ("evil.txt", b"hello", "text/plain")},
+    )
+    assert r.status_code == 415

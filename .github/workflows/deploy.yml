@@ -1,7 +1,9 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -11,6 +13,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -29,15 +32,6 @@ jobs:
           npm ci
           npm run build
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-
-      - name: Resolve backend deps (sanity check)
-        working-directory: backend
-        run: uv sync
-
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -51,29 +45,21 @@ jobs:
       - name: Rsync backend
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           rsync -az --delete \
-            --exclude '.venv' --exclude '__pycache__' --exclude '*.db' --exclude 'tests' \
-            backend/ "$SSH_USER@$SSH_HOST:/opt/kicker/backend/"
+            --exclude '.venv' --exclude '__pycache__' --exclude '*.db' \
+            --exclude '*.db-shm' --exclude '*.db-wal' \
+            --exclude 'tests' --exclude 'storage' \
+            backend/ "deploy@$SSH_HOST:/srv/kicker/backend/"
 
       - name: Rsync frontend build
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          rsync -az --delete frontend/dist/ "$SSH_USER@$SSH_HOST:/opt/kicker/frontend/dist/"
+          rsync -az --delete frontend/dist/ "deploy@$SSH_HOST:/srv/kicker/frontend/dist/"
 
-      - name: Sync deploy artifacts
+      - name: Install backend deps and restart service
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          rsync -az deploy/ "$SSH_USER@$SSH_HOST:/opt/kicker/deploy/"
-
-      - name: Install backend deps and reload service
-        env:
-          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.DEPLOY_USER }}
-        run: |
-          ssh "$SSH_USER@$SSH_HOST" "cd /opt/kicker/backend && uv sync && sudo systemctl restart kicker"
+          ssh "deploy@$SSH_HOST" "cd /srv/kicker/backend && uv sync && sudo systemctl restart kicker"

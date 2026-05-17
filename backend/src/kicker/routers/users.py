@@ -1,14 +1,32 @@
 import hashlib
+import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import auth, models, schemas
+from ..config import get_settings
 from ..db import get_db
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+_IMAGE_MAGIC: list[tuple[bytes, str]] = [
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"\xff\xd8\xff", "jpg"),
+]
+
+
+def _sniff_image(data: bytes) -> str | None:
+    for prefix, ext in _IMAGE_MAGIC:
+        if data.startswith(prefix):
+            return ext
+    if len(data) >= 12 and data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
 
 
 @router.get("")
@@ -67,6 +85,8 @@ def update_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot edit other users")
     if payload.role is not None and actor.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
+    if payload.name is not None and actor.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change name")
     for field in ("name", "avatar_url", "role"):
         value = getattr(payload, field)
         if value is not None:
@@ -94,6 +114,65 @@ def delete_user(
     target.deleted_at = models.utcnow()
     db.query(models.Session).filter(models.Session.user_id == user_id).delete()
     db.commit()
+
+
+@router.post("/{user_id}/password")
+def change_password(
+    user_id: int,
+    payload: schemas.PasswordChangeIn,
+    actor: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    target = db.get(models.User, user_id)
+    if target is None or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if actor.role != "admin" and actor.id != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' password")
+    if actor.id == user_id:
+        if not payload.current_password or target.password_hash is None or not auth.verify_password(
+            target.password_hash, payload.current_password
+        ):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Current password incorrect")
+    target.password_hash = auth.hash_password(payload.new_password)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/avatar")
+def upload_avatar(
+    user_id: int,
+    file: UploadFile = File(...),
+    actor: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+) -> schemas.UserOut:
+    target = db.get(models.User, user_id)
+    if target is None or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if actor.role != "admin" and actor.id != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' avatar")
+
+    settings = get_settings()
+    data = file.file.read(settings.avatar_max_bytes + 1)
+    if len(data) > settings.avatar_max_bytes:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Image exceeds {settings.avatar_max_bytes // 1024}KB",
+        )
+    ext = _sniff_image(data)
+    if ext is None:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PNG, JPEG or WebP allowed"
+        )
+
+    avatars_dir = Path(settings.storage_dir) / "avatars"
+    avatars_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{secrets.token_hex(16)}.{ext}"
+    (avatars_dir / filename).write_bytes(data)
+
+    target.avatar_url = f"/api/avatars/{filename}"
+    db.commit()
+    db.refresh(target)
+    return schemas.UserOut.from_user(target)
 
 
 @router.post("/{user_id}/password-link")

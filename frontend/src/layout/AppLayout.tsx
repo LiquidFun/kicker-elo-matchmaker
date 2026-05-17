@@ -30,14 +30,12 @@ export default function AppLayout({ user }: { user: User }) {
         >
           Statistik
         </NavLink>
-        {user.role === 'admin' && (
-          <NavLink
-            to="/admin/users"
-            className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
-          >
-            Verwaltung
-          </NavLink>
-        )}
+        <NavLink
+          to="/admin/users"
+          className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
+        >
+          Verwaltung
+        </NavLink>
         <button
           onClick={() => logout.mutate()}
           className={`${navItem} ${navInactive}`}

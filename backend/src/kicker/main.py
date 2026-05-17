@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import engine
@@ -37,6 +39,11 @@ def create_app() -> FastAPI:
     app.include_router(balance_router.router)
     app.include_router(settings_router.router)
     app.include_router(stats_router.router)
+
+    avatars_dir = Path(settings.storage_dir) / "avatars"
+    avatars_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/api/avatars", StaticFiles(directory=avatars_dir), name="avatars")
+
     return app
 
 

@@ -91,6 +91,32 @@ export const useResetPasswordLink = () =>
       api.post<{ password_set_url: string }>(`/api/users/${id}/password-link`),
   });
 
+export const useChangePassword = () =>
+  useMutation({
+    mutationFn: (vars: { id: number; current_password?: string; new_password: string }) =>
+      api.post<{ ok: boolean }>(`/api/users/${vars.id}/password`, {
+        current_password: vars.current_password,
+        new_password: vars.new_password,
+      }),
+  });
+
+export const useUploadAvatar = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { id: number; file: File }) => {
+      const fd = new FormData();
+      fd.append('file', vars.file);
+      return api.postForm<User>(`/api/users/${vars.id}/avatar`, fd);
+    },
+    onSuccess: (user) => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.setQueryData(['me'], (prev: User | null | undefined) =>
+        prev && prev.id === user.id ? user : prev,
+      );
+    },
+  });
+};
+
 export const useSetPassword = () =>
   useMutation({
     mutationFn: (vars: { token: string; new_password: string }) =>

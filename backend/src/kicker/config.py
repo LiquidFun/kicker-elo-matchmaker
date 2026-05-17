@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     cookie_secure: bool = False
     cookie_name: str = "kicker_session"
+    storage_dir: str = "./storage"
+    avatar_max_bytes: int = 2 * 1024 * 1024
 
 
 @lru_cache

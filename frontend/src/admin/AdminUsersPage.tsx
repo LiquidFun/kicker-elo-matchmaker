@@ -5,41 +5,63 @@ import {
   useDeleteUser,
   useMe,
   useResetPasswordLink,
-  useUpdateUser,
   useUsers,
 } from '../api/hooks';
 import type { User } from '../api/types';
 import Avatar from '../match/Avatar';
 import Modal from '../components/Modal';
+import EditUserDialog from './EditUserDialog';
 
 export default function AdminUsersPage() {
   const usersQ = useUsers();
+  const me = useMe();
+  const isAdmin = me.data?.role === 'admin';
   const [createOpen, setCreateOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const editing = usersQ.data?.find((u) => u.id === editingId) ?? null;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-line bg-paper p-3">
         <div className="text-sm text-ink2">{usersQ.data?.length ?? 0} Benutzer</div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="rounded-lg bg-pitch px-3 py-1.5 text-sm font-semibold text-white"
-        >
-          + Neuer Benutzer
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="rounded-lg bg-pitch px-3 py-1.5 text-sm font-semibold text-white"
+          >
+            + Neuer Benutzer
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {usersQ.data?.map((u) => (
-          <UserRow key={u.id} user={u} onLink={setLink} />
+          <UserRow
+            key={u.id}
+            user={u}
+            onLink={setLink}
+            onEdit={() => setEditingId(u.id)}
+          />
         ))}
       </div>
 
-      <CreateUserModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onLink={setLink}
-      />
+      {isAdmin && (
+        <CreateUserModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onLink={setLink}
+        />
+      )}
+
+      {editing && (
+        <EditUserDialog
+          open
+          onClose={() => setEditingId(null)}
+          user={editing}
+          isAdmin={!!isAdmin}
+        />
+      )}
 
       <Modal open={link !== null} onClose={() => setLink(null)} title="Passwort-Link">
         <p className="mb-2 text-sm text-ink2">
@@ -61,15 +83,18 @@ export default function AdminUsersPage() {
 function UserRow({
   user,
   onLink,
+  onEdit,
 }: {
   user: User;
   onLink: (url: string) => void;
+  onEdit: () => void;
 }) {
   const me = useMe();
   const del = useDeleteUser();
   const link = useResetPasswordLink();
-  const update = useUpdateUser();
+  const isAdmin = me.data?.role === 'admin';
   const isSelf = me.data?.id === user.id;
+  const canEdit = isAdmin || isSelf;
 
   function onDelete() {
     if (!confirm(`${user.name} löschen? Vergangene Spiele bleiben erhalten.`)) return;
@@ -80,14 +105,6 @@ function UserRow({
     link.mutate(user.id, {
       onSuccess: (data) => onLink(data.password_set_url),
     });
-  }
-
-  function onToggleRole() {
-    const next = user.role === 'admin' ? 'user' : 'admin';
-    if (next === 'user' && isSelf) {
-      if (!confirm('Eigene Admin-Rechte wirklich entziehen?')) return;
-    }
-    update.mutate({ id: user.id, role: next });
   }
 
   return (
@@ -108,29 +125,53 @@ function UserRow({
           )}
         </div>
       </div>
-      <button
-        onClick={onToggleRole}
-        disabled={update.isPending}
-        className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
-        title={user.role === 'admin' ? 'Admin entfernen' : 'Zu Admin befördern'}
-      >
-        {update.isPending ? '…' : user.role === 'admin' ? '↓ User' : '↑ Admin'}
-      </button>
-      <button
-        onClick={onResetLink}
-        disabled={link.isPending}
-        className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
-      >
-        {link.isPending ? '…' : user.has_password ? 'Zurücks.' : 'Link'}
-      </button>
-      <button
-        onClick={onDelete}
-        disabled={del.isPending || isSelf}
-        className="rounded-md bg-paper px-2 py-1 text-xs text-red-600 ring-1 ring-line disabled:opacity-50"
-      >
-        ×
-      </button>
+      {canEdit && (
+        <button
+          onClick={onEdit}
+          className="rounded-md bg-paper p-1.5 text-ink ring-1 ring-line"
+          aria-label="Bearbeiten"
+          title="Bearbeiten"
+        >
+          <PencilIcon />
+        </button>
+      )}
+      {isAdmin && (
+        <>
+          <button
+            onClick={onResetLink}
+            disabled={link.isPending}
+            className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
+          >
+            {link.isPending ? '…' : user.has_password ? 'Zurücks.' : 'Link'}
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={del.isPending || isSelf}
+            className="rounded-md bg-paper px-2 py-1 text-xs text-red-600 ring-1 ring-line disabled:opacity-50"
+          >
+            ×
+          </button>
+        </>
+      )}
     </div>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
   );
 }
 

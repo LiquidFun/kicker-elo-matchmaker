@@ -92,6 +92,11 @@ class PasswordSetIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=256)
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str | None = None
+    new_password: str = Field(min_length=8, max_length=256)
+
+
 class MatchPlayerIn(BaseModel):
     user_id: int
     team: Literal[1, 2]
