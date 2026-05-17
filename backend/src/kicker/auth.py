@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -37,7 +37,7 @@ def _hash_token(raw: str) -> str:
 
 def create_session(db: SASession, user: models.User, user_agent: str | None) -> str:
     sid = _new_session_id()
-    expires = datetime.now(timezone.utc) + timedelta(days=_settings.session_lifetime_days)
+    expires = datetime.now(UTC) + timedelta(days=_settings.session_lifetime_days)
     db.add(
         models.Session(
             id=sid, user_id=user.id, expires_at=expires, user_agent=user_agent
@@ -71,8 +71,8 @@ def get_current_user(
     if not session_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     sess = db.get(models.Session, session_id)
-    now = datetime.now(timezone.utc)
-    if not sess or sess.expires_at.replace(tzinfo=timezone.utc) < now:
+    now = datetime.now(UTC)
+    if not sess or sess.expires_at.replace(tzinfo=UTC) < now:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
     user = db.get(models.User, sess.user_id)
     if not user or user.deleted_at is not None:
@@ -91,7 +91,7 @@ def require_admin(user: models.User = Depends(get_current_user)) -> models.User:
 def create_password_set_token(db: SASession, user: models.User) -> str:
     raw = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw)
-    expires = datetime.now(timezone.utc) + timedelta(hours=_settings.password_link_lifetime_hours)
+    expires = datetime.now(UTC) + timedelta(hours=_settings.password_link_lifetime_hours)
     db.add(models.PasswordSetToken(token_hash=token_hash, user_id=user.id, expires_at=expires))
     db.commit()
     return raw
@@ -99,13 +99,15 @@ def create_password_set_token(db: SASession, user: models.User) -> str:
 
 def consume_password_set_token(db: SASession, raw: str) -> models.User:
     token = db.get(models.PasswordSetToken, _hash_token(raw))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if (
         token is None
         or token.used_at is not None
-        or token.expires_at.replace(tzinfo=timezone.utc) < now
+        or token.expires_at.replace(tzinfo=UTC) < now
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token"
+        )
     user = db.get(models.User, token.user_id)
     if user is None or user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")

@@ -185,6 +185,7 @@ def test_avatar_rejects_non_image(client, admin_client, admin_user):
 
 def test_avatar_remove_clears_field_and_deletes_file(admin_client, admin_user):
     import os
+
     from kicker.config import get_settings
 
     r = admin_client.post(
@@ -204,6 +205,7 @@ def test_avatar_remove_clears_field_and_deletes_file(admin_client, admin_user):
 
 def test_avatar_reupload_deletes_previous(admin_client, admin_user):
     import os
+
     from kicker.config import get_settings
 
     r = admin_client.post(

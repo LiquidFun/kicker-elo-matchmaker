@@ -1,6 +1,7 @@
+import contextlib
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -38,10 +39,8 @@ def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
     filename = url[len(_AVATAR_URL_PREFIX):]
     if "/" in filename or filename in ("", ".", ".."):
         return
-    try:
+    with contextlib.suppress(OSError):
         (Path(storage_dir) / "avatars" / filename).unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 @router.get("")
@@ -148,11 +147,12 @@ def change_password(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     if actor.role != "admin" and actor.id != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' password")
-    if actor.id == user_id:
-        if not payload.current_password or target.password_hash is None or not auth.verify_password(
-            target.password_hash, payload.current_password
-        ):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Current password incorrect")
+    if actor.id == user_id and (
+        not payload.current_password
+        or target.password_hash is None
+        or not auth.verify_password(target.password_hash, payload.current_password)
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Current password incorrect")
     target.password_hash = auth.hash_password(payload.new_password)
     db.commit()
     return {"ok": True}
@@ -221,11 +221,11 @@ password_router = APIRouter(prefix="/api/password", tags=["password"])
 def lookup_password_token(token: str, db: Session = Depends(get_db)) -> schemas.UserOut:
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     row = db.get(models.PasswordSetToken, token_hash)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if (
         row is None
         or row.used_at is not None
-        or row.expires_at.replace(tzinfo=timezone.utc) < now
+        or row.expires_at.replace(tzinfo=UTC) < now
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
     user = db.get(models.User, row.user_id)

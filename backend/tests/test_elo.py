@@ -3,8 +3,8 @@ import math
 import pytest
 
 from kicker.elo import (
-    DoublesLineup,
     K_FACTOR,
+    DoublesLineup,
     PlayerRatings,
     SinglesLineup,
     best_balanced_lineup,
@@ -83,7 +83,10 @@ def test_enumerate_lineups_count_is_twelve():
     lineups = enumerate_doubles_lineups(players)
     # 3 team partitions × 2 t1 orderings × 2 t2 orderings = 12
     assert len(lineups) == 12
-    keys = {(lu.team1_attacker, lu.team1_defender, lu.team2_attacker, lu.team2_defender) for lu in lineups}
+    keys = {
+        (lu.team1_attacker, lu.team1_defender, lu.team2_attacker, lu.team2_defender)
+        for lu in lineups
+    }
     assert len(keys) == 12
     # Team 1 always contains the lowest id
     for lu in lineups:
@@ -92,13 +95,23 @@ def test_enumerate_lineups_count_is_twelve():
 
 def test_balance_picks_closest_to_50_50():
     # Strong/weak/strong/weak — pairing strong+weak vs strong+weak should be ~50/50.
-    players = [pr(1, a=1200, d=1200), pr(2, a=800, d=800), pr(3, a=1200, d=1200), pr(4, a=800, d=800)]
+    players = [
+        pr(1, a=1200, d=1200),
+        pr(2, a=800, d=800),
+        pr(3, a=1200, d=1200),
+        pr(4, a=800, d=800),
+    ]
     best, _ = best_balanced_lineup(players)
     assert abs(best.win_prob_team1 - 0.5) < 0.05
 
 
 def test_balance_unfair_lineup_when_two_strong_grouped():
-    players = [pr(1, a=1300, d=1300), pr(2, a=1300, d=1300), pr(3, a=800, d=800), pr(4, a=800, d=800)]
+    players = [
+        pr(1, a=1300, d=1300),
+        pr(2, a=1300, d=1300),
+        pr(3, a=800, d=800),
+        pr(4, a=800, d=800),
+    ]
     best, alternatives = best_balanced_lineup(players)
     # 1+2 vs 3+4 is unavoidable — there's no balanced split here.
     # Best lineup will still be the least lopsided.
