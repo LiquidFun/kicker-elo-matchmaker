@@ -65,7 +65,6 @@ def create_user(
 ) -> schemas.UserCreateOut:
     user = models.User(
         name=payload.name,
-        avatar_url=payload.avatar_url,
         role=payload.role,
         password_hash=auth.hash_password(payload.password) if payload.password else None,
     )
@@ -101,11 +100,8 @@ def update_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
     if payload.name is not None and actor.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change name")
-    # exclude_unset = honor explicit nulls (e.g. clearing the avatar) but ignore
-    # fields the client didn't send at all.
     provided = payload.model_dump(exclude_unset=True)
-    previous_avatar = target.avatar_url
-    for field in ("name", "avatar_url", "role"):
+    for field in ("name", "role"):
         if field in provided:
             setattr(target, field, provided[field])
     try:
@@ -114,8 +110,6 @@ def update_user(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Name already exists") from None
     db.refresh(target)
-    if "avatar_url" in provided and previous_avatar != target.avatar_url:
-        _delete_avatar_file(previous_avatar, get_settings().storage_dir)
     return schemas.UserOut.from_user(target)
 
 
@@ -156,6 +150,26 @@ def change_password(
     target.password_hash = auth.hash_password(payload.new_password)
     db.commit()
     return {"ok": True}
+
+
+@router.delete("/{user_id}/avatar")
+def delete_avatar(
+    user_id: int,
+    actor: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+) -> schemas.UserOut:
+    target = db.get(models.User, user_id)
+    if target is None or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if actor.role != "admin" and actor.id != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' avatar")
+
+    previous = target.avatar_url
+    target.avatar_url = None
+    db.commit()
+    db.refresh(target)
+    _delete_avatar_file(previous, get_settings().storage_dir)
+    return schemas.UserOut.from_user(target)
 
 
 @router.post("/{user_id}/avatar")
@@ -217,9 +231,11 @@ def issue_password_link(
 password_router = APIRouter(prefix="/api/password", tags=["password"])
 
 
-@password_router.get("/lookup")
-def lookup_password_token(token: str, db: Session = Depends(get_db)) -> schemas.UserOut:
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
+@password_router.post("/lookup")
+def lookup_password_token(
+    payload: schemas.PasswordLookupIn, db: Session = Depends(get_db)
+) -> schemas.UserOut:
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
     row = db.get(models.PasswordSetToken, token_hash)
     now = datetime.now(UTC)
     if (

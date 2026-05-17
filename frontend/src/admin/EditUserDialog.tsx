@@ -1,6 +1,12 @@
 import { FormEvent, useRef, useState } from 'react';
 
-import { useChangePassword, useMe, useUpdateUser, useUploadAvatar } from '../api/hooks';
+import {
+  useChangePassword,
+  useDeleteAvatar,
+  useMe,
+  useUpdateUser,
+  useUploadAvatar,
+} from '../api/hooks';
 import type { User } from '../api/types';
 import Avatar from '../match/Avatar';
 import Modal from '../components/Modal';
@@ -67,7 +73,7 @@ function RoleSection({ user }: { user: User }) {
 
 function AvatarSection({ user }: { user: User }) {
   const upload = useUploadAvatar();
-  const update = useUpdateUser();
+  const remove = useDeleteAvatar();
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +89,8 @@ function AvatarSection({ user }: { user: User }) {
   }
 
   function onRemove() {
-    update.mutate({ id: user.id, avatar_url: null });
+    setError(null);
+    remove.mutate(user.id, { onError: (err) => setError(err.message) });
   }
 
   return (
@@ -104,7 +111,7 @@ function AvatarSection({ user }: { user: User }) {
             <button
               type="button"
               onClick={onRemove}
-              disabled={update.isPending}
+              disabled={remove.isPending}
               className="rounded-lg bg-surface px-3 py-1.5 text-sm text-ink2 ring-1 ring-line disabled:opacity-50"
             >
               Entfernen

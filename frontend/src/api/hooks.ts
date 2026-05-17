@@ -60,7 +60,6 @@ export const useCreateUser = () => {
   return useMutation({
     mutationFn: (vars: {
       name: string;
-      avatar_url?: string;
       role?: 'admin' | 'user';
       password?: string;
     }) => api.post<UserCreateResult>('/api/users', vars),
@@ -79,7 +78,7 @@ export const useDeleteUser = () => {
 export const useUpdateUser = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: number } & Partial<Pick<User, 'name' | 'avatar_url' | 'role'>>) =>
+    mutationFn: (vars: { id: number } & Partial<Pick<User, 'name' | 'role'>>) =>
       api.patch<User>(`/api/users/${vars.id}`, vars),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
@@ -117,6 +116,19 @@ export const useUploadAvatar = () => {
   });
 };
 
+export const useDeleteAvatar = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<User>(`/api/users/${id}/avatar`),
+    onSuccess: (user) => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.setQueryData(['me'], (prev: User | null | undefined) =>
+        prev && prev.id === user.id ? user : prev,
+      );
+    },
+  });
+};
+
 export const useSetPassword = () =>
   useMutation({
     mutationFn: (vars: { token: string; new_password: string }) =>
@@ -126,8 +138,7 @@ export const useSetPassword = () =>
 export const usePasswordTokenLookup = (token: string | null) =>
   useQuery({
     queryKey: ['password-lookup', token],
-    queryFn: () =>
-      api.get<User>(`/api/password/lookup?token=${encodeURIComponent(token!)}`),
+    queryFn: () => api.post<User>('/api/password/lookup', { token }),
     enabled: !!token,
     retry: false,
   });

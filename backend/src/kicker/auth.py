@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,10 @@ from .db import get_db
 _hasher = PasswordHasher()
 _settings = get_settings()
 
+# Hash of a random string; used to keep failed-login timing constant
+# regardless of whether the user exists.
+_DUMMY_HASH = _hasher.hash(secrets.token_urlsafe(16))
+
 
 def hash_password(password: str) -> str:
     return _hasher.hash(password)
@@ -25,6 +30,12 @@ def verify_password(hash_: str, password: str) -> bool:
         return True
     except VerifyMismatchError:
         return False
+
+
+def dummy_verify() -> None:
+    """Run an Argon2 verify against a constant hash to equalize login timing."""
+    with contextlib.suppress(VerifyMismatchError):
+        _hasher.verify(_DUMMY_HASH, "x")
 
 
 def _new_session_id() -> str:

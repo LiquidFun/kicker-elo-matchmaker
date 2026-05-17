@@ -183,7 +183,7 @@ def test_avatar_rejects_non_image(client, admin_client, admin_user):
     assert r.status_code == 415
 
 
-def test_avatar_remove_clears_field_and_deletes_file(admin_client, admin_user):
+def test_avatar_delete_clears_field_and_removes_file(admin_client, admin_user):
     import os
 
     from kicker.config import get_settings
@@ -197,10 +197,47 @@ def test_avatar_remove_clears_field_and_deletes_file(admin_client, admin_user):
     path = os.path.join(get_settings().storage_dir, "avatars", filename)
     assert os.path.exists(path)
 
-    r = admin_client.patch(f"/api/users/{admin_user.id}", json={"avatar_url": None})
+    r = admin_client.delete(f"/api/users/{admin_user.id}/avatar")
     assert r.status_code == 200
     assert r.json()["avatar_url"] is None
     assert not os.path.exists(path)
+
+
+def test_patch_ignores_avatar_url(admin_client, admin_user):
+    # avatar_url is no longer in the input schema; extra fields are silently
+    # dropped, so the request succeeds but the avatar is untouched.
+    r = admin_client.patch(
+        f"/api/users/{admin_user.id}", json={"avatar_url": "https://evil.example/x.png"}
+    )
+    assert r.status_code == 200
+    assert r.json()["avatar_url"] is None
+
+
+def test_non_admin_cannot_delete_other_avatar(client, admin_client, admin_user):
+    admin_client.post(
+        f"/api/users/{admin_user.id}/avatar",
+        files={"file": ("a.png", _PNG_1X1, "image/png")},
+    )
+    admin_client.post("/api/users", json={"name": "Stranger", "password": "pw12345678"})
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "Stranger", "password": "pw12345678"})
+    r = admin_client.delete(f"/api/users/{admin_user.id}/avatar")
+    assert r.status_code == 403
+
+
+def test_password_lookup_uses_post_body(client, admin_client):
+    r = admin_client.post("/api/users", json={"name": "Lookup"})
+    set_url = r.json()["password_set_url"]
+    from urllib.parse import parse_qs, urlparse
+    token = parse_qs(urlparse(set_url).query)["token"][0]
+
+    client.post("/api/auth/logout")
+    r = client.post("/api/password/lookup", json={"token": token})
+    assert r.status_code == 200
+    assert r.json()["name"] == "Lookup"
+
+    r = client.post("/api/password/lookup", json={"token": "bogus"})
+    assert r.status_code == 404
 
 
 def test_avatar_reupload_deletes_previous(admin_client, admin_user):

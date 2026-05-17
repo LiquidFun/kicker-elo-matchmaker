@@ -51,7 +51,6 @@ class UserOut(BaseModel):
 
 class UserCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
-    avatar_url: str | None = None
     role: Role = "user"
     password: str | None = Field(default=None, min_length=8, max_length=256)
 
@@ -63,7 +62,6 @@ class UserCreateIn(BaseModel):
 
 class UserUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
-    avatar_url: str | None = None
     role: Role | None = None
 
     @field_validator("name")
@@ -90,6 +88,10 @@ class LoginIn(BaseModel):
 class PasswordSetIn(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=256)
+
+
+class PasswordLookupIn(BaseModel):
+    token: str
 
 
 class PasswordChangeIn(BaseModel):
