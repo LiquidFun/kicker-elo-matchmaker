@@ -72,18 +72,20 @@ export default function StatsPage() {
   }, [activeInMode]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto">
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
       {globalQ.data && (
-        <div className="grid grid-cols-3 gap-2 px-3 py-3 text-center text-xs">
+        <div className="grid shrink-0 grid-cols-3 gap-2 px-3 py-3 text-center text-xs">
           <Stat label="Spiele" value={globalQ.data.total_matches} />
           <Stat label="Doppel" value={globalQ.data.doubles_matches} />
           <Stat label="Einzel" value={globalQ.data.singles_matches} />
         </div>
       )}
 
-      <Leaderboard players={players} colorByUserId={colorByUserId} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Leaderboard players={players} colorByUserId={colorByUserId} />
+      </div>
 
-      <div className="px-3 pt-4">
+      <div className="shrink-0 border-t border-line bg-paper px-3 pb-3 pt-3">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs uppercase tracking-wider text-ink2">Elo-Verlauf</h3>
           <ModePicker mode={chartMode} onChange={setChartMode} />
