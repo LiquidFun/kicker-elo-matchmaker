@@ -111,7 +111,7 @@ function SessionTotals({
           return (
             <li key={userId} className="flex items-center gap-2 py-1.5">
               <Avatar user={u} size="sm" />
-              <span className="flex-1 truncate text-sm text-ink">{u.display_name}</span>
+              <span className="flex-1 truncate text-sm text-ink">{u.name}</span>
               <PositionDelta label="A" value={t.attacker} />
               <PositionDelta label="D" value={t.defender} />
               <PositionDelta label="E" value={t.singles} />
@@ -167,7 +167,7 @@ function TeamLine({
             <span
               className={`truncate text-sm ${isWinner ? 'font-semibold text-ink' : 'text-ink2'}`}
             >
-              {u.display_name}
+              {u.name}
             </span>
           </div>
         );
@@ -190,7 +190,7 @@ function DeltaStrip({
         if (!u) return null;
         return (
           <span key={p.user_id} className="flex items-center gap-1">
-            <span className="text-ink2">{u.display_name}</span>
+            <span className="text-ink2">{u.name}</span>
             <span
               className={`tabular-nums font-semibold ${
                 p.rating_delta >= 0 ? 'text-pitch' : 'text-accent'

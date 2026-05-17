@@ -3,7 +3,9 @@ import { FormEvent, useState } from 'react';
 import {
   useCreateUser,
   useDeleteUser,
+  useMe,
   useResetPasswordLink,
+  useUpdateUser,
   useUsers,
 } from '../api/hooks';
 import type { User } from '../api/types';
@@ -63,16 +65,14 @@ function UserRow({
   user: User;
   onLink: (url: string) => void;
 }) {
+  const me = useMe();
   const del = useDeleteUser();
   const link = useResetPasswordLink();
+  const update = useUpdateUser();
+  const isSelf = me.data?.id === user.id;
 
   function onDelete() {
-    if (
-      !confirm(
-        `${user.display_name} löschen? Vergangene Spiele bleiben erhalten.`,
-      )
-    )
-      return;
+    if (!confirm(`${user.name} löschen? Vergangene Spiele bleiben erhalten.`)) return;
     del.mutate(user.id);
   }
 
@@ -82,12 +82,20 @@ function UserRow({
     });
   }
 
+  function onToggleRole() {
+    const next = user.role === 'admin' ? 'user' : 'admin';
+    if (next === 'user' && isSelf) {
+      if (!confirm('Eigene Admin-Rechte wirklich entziehen?')) return;
+    }
+    update.mutate({ id: user.id, role: next });
+  }
+
   return (
     <div className="flex items-center gap-3 border-b border-line bg-surface px-3 py-3">
       <Avatar user={user} size="md" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">
-          {user.display_name}
+          {user.name}
           {user.role === 'admin' && (
             <span className="ml-2 rounded bg-pitch px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
               admin
@@ -99,11 +107,15 @@ function UserRow({
             </span>
           )}
         </div>
-        <div className="truncate text-xs text-ink2">
-          @{user.username}
-          {user.email && ` · ${user.email}`}
-        </div>
       </div>
+      <button
+        onClick={onToggleRole}
+        disabled={update.isPending}
+        className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
+        title={user.role === 'admin' ? 'Admin entfernen' : 'Zu Admin befördern'}
+      >
+        {update.isPending ? '…' : user.role === 'admin' ? '↓ User' : '↑ Admin'}
+      </button>
       <button
         onClick={onResetLink}
         disabled={link.isPending}
@@ -113,7 +125,7 @@ function UserRow({
       </button>
       <button
         onClick={onDelete}
-        disabled={del.isPending}
+        disabled={del.isPending || isSelf}
         className="rounded-md bg-paper px-2 py-1 text-xs text-red-600 ring-1 ring-line disabled:opacity-50"
       >
         ×
@@ -131,18 +143,14 @@ function CreateUserModal({
   onClose: () => void;
   onLink: (url: string) => void;
 }) {
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'user'>('user');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateUser();
 
   function reset() {
-    setUsername('');
-    setDisplayName('');
-    setEmail('');
+    setName('');
     setPassword('');
     setRole('user');
     setError(null);
@@ -153,9 +161,7 @@ function CreateUserModal({
     setError(null);
     create.mutate(
       {
-        username: username.trim(),
-        display_name: displayName.trim() || username.trim(),
-        email: email.trim() || undefined,
+        name: name.trim(),
         password: password || undefined,
         role,
       },
@@ -180,30 +186,13 @@ function CreateUserModal({
       title="Neuer Benutzer"
     >
       <form onSubmit={submit} className="space-y-3">
-        <Field label="Benutzername (Anmelde-ID)">
+        <Field label="Name">
           <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             className="input"
-            autoCapitalize="off"
             autoComplete="off"
             required
-          />
-        </Field>
-        <Field label="Anzeigename (optional, sonst Benutzername)">
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="E-Mail (optional)">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input"
-            autoComplete="off"
           />
         </Field>
         <Field label="Passwort (optional — leer = Gast)">

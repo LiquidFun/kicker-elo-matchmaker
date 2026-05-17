@@ -64,8 +64,7 @@ def client(engine, session_factory, monkeypatch):
 def admin_user(session_factory) -> User:
     with session_factory() as s:
         u = User(
-            username="admin",
-            display_name="Admin",
+            name="Admin",
             role="admin",
             password_hash=hash_password("adminpw123"),
         )
@@ -77,6 +76,6 @@ def admin_user(session_factory) -> User:
 
 @pytest.fixture
 def admin_client(client, admin_user) -> "TestClient":
-    r = client.post("/api/auth/login", json={"username": "admin", "password": "adminpw123"})
+    r = client.post("/api/auth/login", json={"name": "Admin", "password": "adminpw123"})
     assert r.status_code == 200, r.text
     return client

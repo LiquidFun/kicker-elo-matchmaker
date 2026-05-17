@@ -52,7 +52,7 @@ export default function StatsPage() {
       const totalA = a.games_attacker + a.games_defender + a.games_singles;
       const totalB = b.games_attacker + b.games_defender + b.games_singles;
       if (totalA !== totalB) return totalB - totalA;
-      return a.display_name.localeCompare(b.display_name);
+      return a.name.localeCompare(b.name);
     });
   }, [usersQ.data]);
 
@@ -139,7 +139,7 @@ function Leaderboard({
                   className="min-w-0 flex-1 truncate text-sm font-medium"
                   style={color ? { color } : undefined}
                 >
-                  {u.display_name}
+                  {u.name}
                 </div>
               </div>
               <RatingCell rating={u.rating_attacker} games={u.games_attacker} />
@@ -232,7 +232,7 @@ function ProgressionChart({
               labelStyle={{ color: '#6b7280' }}
               formatter={(value, name) => {
                 const p = activePlayers.find((p) => String(p.id) === name);
-                return [Math.round(Number(value)), p?.display_name ?? name];
+                return [Math.round(Number(value)), p?.name ?? name];
               }}
             />
             {activePlayers.map((p) => {
@@ -296,7 +296,7 @@ function EndAvatar({
         fontWeight={700}
         fill={color}
       >
-        {initials(user.display_name)}
+        {initials(user.name)}
       </text>
     </g>
   );

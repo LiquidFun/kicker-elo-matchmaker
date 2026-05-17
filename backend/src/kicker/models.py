@@ -25,10 +25,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    display_name: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str] = mapped_column(
+        String(128, collation="NOCASE"), unique=True, index=True
+    )
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(256), nullable=True, unique=True)
     role: Mapped[str] = mapped_column(String(16), default="user")
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
 

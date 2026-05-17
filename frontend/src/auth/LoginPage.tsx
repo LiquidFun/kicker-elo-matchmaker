@@ -5,7 +5,7 @@ import { useLogin, useMe } from '../api/hooks';
 
 export default function LoginPage() {
   const me = useMe();
-  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const login = useLogin();
@@ -16,7 +16,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     login.mutate(
-      { username, password },
+      { name, password },
       { onError: (err) => setError(err.message) },
     );
   }
@@ -29,10 +29,10 @@ export default function LoginPage() {
       >
         <h1 className="text-center text-2xl font-bold text-pitch">Kicker</h1>
         <div>
-          <label className="mb-1 block text-sm text-ink2">Benutzername</label>
+          <label className="mb-1 block text-sm text-ink2">Name</label>
           <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             className="w-full rounded-lg bg-paper px-3 py-2 text-ink outline-none ring-1 ring-line focus:ring-pitch"
             autoComplete="username"
             autoFocus

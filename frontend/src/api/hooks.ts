@@ -32,7 +32,7 @@ export const useMe = () =>
 export const useLogin = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { username: string; password: string }) =>
+    mutationFn: (vars: { name: string; password: string }) =>
       api.post<User>('/api/auth/login', vars),
     onSuccess: (user) => qc.setQueryData(['me'], user),
   });
@@ -59,9 +59,7 @@ export const useCreateUser = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: {
-      username: string;
-      display_name: string;
-      email?: string;
+      name: string;
       avatar_url?: string;
       role?: 'admin' | 'user';
       password?: string;
@@ -81,7 +79,7 @@ export const useDeleteUser = () => {
 export const useUpdateUser = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: number } & Partial<Pick<User, 'display_name' | 'email' | 'avatar_url' | 'role'>>) =>
+    mutationFn: (vars: { id: number } & Partial<Pick<User, 'name' | 'avatar_url' | 'role'>>) =>
       api.patch<User>(`/api/users/${vars.id}`, vars),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });

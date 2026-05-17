@@ -4,10 +4,8 @@ export type Position = 'attacker' | 'defender' | 'singles';
 
 export interface User {
   id: number;
-  username: string;
-  display_name: string;
+  name: string;
   avatar_url: string | null;
-  email: string | null;
   role: Role;
   has_password: boolean;
   rating_attacker: number;

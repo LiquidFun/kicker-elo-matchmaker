@@ -1,21 +1,26 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Mode = Literal["doubles", "singles"]
 Position = Literal["attacker", "defender", "singles"]
 Role = Literal["admin", "user"]
 
 
+def _trim_name(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("name must not be empty")
+    return v
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    username: str
-    display_name: str
+    name: str
     avatar_url: str | None
-    email: str | None
     role: Role
     has_password: bool
     rating_attacker: float
@@ -30,10 +35,8 @@ class UserOut(BaseModel):
     def from_user(cls, user) -> "UserOut":
         return cls(
             id=user.id,
-            username=user.username,
-            display_name=user.display_name,
+            name=user.name,
             avatar_url=user.avatar_url,
-            email=user.email,
             role=user.role,
             has_password=user.password_hash is not None,
             rating_attacker=user.rating_attacker,
@@ -47,19 +50,26 @@ class UserOut(BaseModel):
 
 
 class UserCreateIn(BaseModel):
-    username: str = Field(min_length=1, max_length=64)
-    display_name: str = Field(min_length=1, max_length=128)
-    email: EmailStr | None = None
+    name: str = Field(min_length=1, max_length=128)
     avatar_url: str | None = None
     role: Role = "user"
     password: str | None = Field(default=None, min_length=8, max_length=256)
 
+    @field_validator("name")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        return _trim_name(v)
+
 
 class UserUpdateIn(BaseModel):
-    display_name: str | None = Field(default=None, min_length=1, max_length=128)
-    email: EmailStr | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
     avatar_url: str | None = None
     role: Role | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip(cls, v: str | None) -> str | None:
+        return _trim_name(v) if v is not None else None
 
 
 class UserCreateOut(BaseModel):
@@ -68,8 +78,13 @@ class UserCreateOut(BaseModel):
 
 
 class LoginIn(BaseModel):
-    username: str
+    name: str
     password: str
+
+    @field_validator("name")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        return v.strip()
 
 
 class PasswordSetIn(BaseModel):

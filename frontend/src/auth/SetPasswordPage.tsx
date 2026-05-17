@@ -60,10 +60,7 @@ export default function SetPasswordPage() {
           <div className="flex items-center gap-3 rounded-xl bg-paper p-3 ring-1 ring-line">
             <Avatar user={lookup.data} size="md" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">
-                {lookup.data.display_name}
-              </div>
-              <div className="truncate text-xs text-ink2">@{lookup.data.username}</div>
+              <div className="truncate text-sm font-semibold">{lookup.data.name}</div>
             </div>
           </div>
         )}

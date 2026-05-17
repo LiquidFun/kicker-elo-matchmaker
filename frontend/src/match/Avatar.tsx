@@ -23,7 +23,7 @@ export default function Avatar({
   size = 'md',
   className = '',
 }: {
-  user: Pick<User, 'display_name' | 'avatar_url' | 'username'>;
+  user: Pick<User, 'name' | 'avatar_url'>;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
@@ -33,7 +33,7 @@ export default function Avatar({
     return (
       <img
         src={user.avatar_url}
-        alt={user.display_name}
+        alt={user.name}
         className={`${dim} rounded-full object-cover ${className}`}
       />
     );
@@ -42,9 +42,9 @@ export default function Avatar({
   return (
     <div
       className={`${dim} flex items-center justify-center rounded-full font-semibold text-pitch ${className}`}
-      style={{ background: hashColor(user.username) }}
+      style={{ background: hashColor(user.name) }}
     >
-      {initials(user.display_name)}
+      {initials(user.name)}
     </div>
   );
 }

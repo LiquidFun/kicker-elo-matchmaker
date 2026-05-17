@@ -58,8 +58,7 @@ export default function UserProfilePage() {
         </Link>
         <Avatar user={user} size="md" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-lg font-semibold">{user.display_name}</div>
-          <div className="text-xs text-ink2">@{user.username}</div>
+          <div className="truncate text-lg font-semibold">{user.name}</div>
         </div>
       </div>
 
@@ -223,7 +222,7 @@ function PeopleList({
               className="flex items-center gap-2 text-sm"
             >
               <Avatar user={u} size="sm" />
-              <div className="min-w-0 flex-1 truncate">{u.display_name}</div>
+              <div className="min-w-0 flex-1 truncate">{u.name}</div>
               <div className="text-xs tabular-nums text-ink2">{it.games}</div>
             </Link>
           );

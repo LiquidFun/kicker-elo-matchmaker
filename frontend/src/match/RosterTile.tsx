@@ -43,7 +43,7 @@ export default function RosterTile({
       `}
     >
       <Avatar user={user} size="md" />
-      <div className="max-w-[64px] truncate text-[11px] leading-tight">{user.display_name}</div>
+      <div className="max-w-[64px] truncate text-[11px] leading-tight">{user.name}</div>
       <div className="text-[10px] text-ink2">{Math.round(rating)}</div>
     </button>
   );

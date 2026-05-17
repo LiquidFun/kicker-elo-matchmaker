@@ -149,7 +149,7 @@ export default function MatchBuilderPage() {
       if (la && lb && la !== lb) return lb.localeCompare(la);
       if (la && !lb) return -1;
       if (!la && lb) return 1;
-      return a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' });
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
     // initialLastPlayedRef is intentionally not a dep — frozen after first load.
     // eslint-disable-next-line react-hooks/exhaustive-deps

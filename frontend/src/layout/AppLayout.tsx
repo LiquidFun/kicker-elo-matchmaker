@@ -43,7 +43,7 @@ export default function AppLayout({ user }: { user: User }) {
           className={`${navItem} ${navInactive}`}
           aria-label="Abmelden"
         >
-          {user.display_name.split(' ')[0]} ↗
+          {user.name.split(' ')[0]} ↗
         </button>
       </nav>
     </div>

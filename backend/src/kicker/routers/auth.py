@@ -15,7 +15,7 @@ def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> schemas.UserOut:
-    user = db.query(models.User).filter(models.User.username == payload.username).one_or_none()
+    user = db.query(models.User).filter(models.User.name == payload.name).one_or_none()
     if user is None or user.deleted_at is not None or user.password_hash is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
     if not auth.verify_password(user.password_hash, payload.password):

@@ -1,10 +1,10 @@
 import pytest
 
 
-def _create_user(client, username: str) -> int:
+def _create_user(client, name: str) -> int:
     r = client.post(
         "/api/users",
-        json={"username": username, "display_name": username.title(), "password": "pw12345678"},
+        json={"name": name.title(), "password": "pw12345678"},
     )
     return r.json()["user"]["id"]
 

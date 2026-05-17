@@ -75,7 +75,7 @@ export default function Slot({
           <>
             <Avatar user={user} size="md" />
             <div className="max-w-[80px] truncate text-xs text-ink">
-              {user.display_name}
+              {user.name}
             </div>
             {mode === 'doubles' ? (
               <div className="flex flex-col items-center gap-0.5 text-[10px] tabular-nums leading-none">

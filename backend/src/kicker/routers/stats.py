@@ -41,7 +41,7 @@ def leaderboard(
     rows = (
         db.query(models.User)
         .filter(models.User.deleted_at.is_(None), games > 0)
-        .order_by(rating.desc(), games.desc(), models.User.display_name)
+        .order_by(rating.desc(), games.desc(), models.User.name)
         .limit(limit)
         .all()
     )

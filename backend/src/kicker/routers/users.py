@@ -19,7 +19,7 @@ def list_users(
     rows = (
         db.query(models.User)
         .filter(models.User.deleted_at.is_(None))
-        .order_by(models.User.display_name)
+        .order_by(models.User.name)
         .all()
     )
     return [schemas.UserOut.from_user(u) for u in rows]
@@ -32,9 +32,7 @@ def create_user(
     db: Session = Depends(get_db),
 ) -> schemas.UserCreateOut:
     user = models.User(
-        username=payload.username,
-        display_name=payload.display_name,
-        email=payload.email,
+        name=payload.name,
         avatar_url=payload.avatar_url,
         role=payload.role,
         password_hash=auth.hash_password(payload.password) if payload.password else None,
@@ -44,7 +42,7 @@ def create_user(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Username or email already exists") from None
+        raise HTTPException(status.HTTP_409_CONFLICT, "Name already exists") from None
     db.refresh(user)
 
     set_url: str | None = None
@@ -69,7 +67,7 @@ def update_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot edit other users")
     if payload.role is not None and actor.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
-    for field in ("display_name", "email", "avatar_url", "role"):
+    for field in ("name", "avatar_url", "role"):
         value = getattr(payload, field)
         if value is not None:
             setattr(target, field, value)
@@ -77,7 +75,7 @@ def update_user(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Email already exists") from None
+        raise HTTPException(status.HTTP_409_CONFLICT, "Name already exists") from None
     db.refresh(target)
     return schemas.UserOut.from_user(target)
 
