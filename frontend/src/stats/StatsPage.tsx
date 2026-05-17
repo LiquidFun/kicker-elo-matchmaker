@@ -21,6 +21,7 @@ function initials(name: string): string {
 }
 
 const MODE_TABS: { mode: LeaderboardMode; label: string }[] = [
+  { mode: 'doubles', label: 'Doppel' },
   { mode: 'attacker', label: 'Sturm' },
   { mode: 'defender', label: 'Abwehr' },
   { mode: 'singles', label: 'Einzel' },
@@ -44,7 +45,7 @@ export default function StatsPage() {
   const usersQ = useUsers();
   const matchesQ = useMatches(undefined, 200);
   const globalQ = useGlobalStats();
-  const [chartMode, setChartMode] = useState<LeaderboardMode>('attacker');
+  const [chartMode, setChartMode] = useState<LeaderboardMode>('doubles');
 
   const players = useMemo(() => {
     const data = usersQ.data ?? [];
@@ -57,6 +58,9 @@ export default function StatsPage() {
   }, [usersQ.data]);
 
   const activeInMode = useMemo(() => {
+    if (chartMode === 'doubles') {
+      return players.filter((p) => p.games_attacker + p.games_defender > 0);
+    }
     const gamesKey = `games_${chartMode}` as const;
     return players.filter((p) => p[gamesKey] > 0);
   }, [players, chartMode]);
@@ -308,14 +312,13 @@ function buildProgressionSeries(
   matches: Match[],
 ) {
   if (activePlayers.length === 0) return [];
+  if (mode === 'doubles') return buildDoublesAverageSeries(activePlayers, matches);
 
   const matchMode = mode === 'singles' ? 'singles' : 'doubles';
   const relevant = matches
     .filter((m) => m.mode === matchMode)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  // current ratings per active player; start at the rating BEFORE the first
-  // relevant match in this mode (or current rating if no relevant matches).
   const current: Record<string, number> = {};
   for (const p of activePlayers) {
     current[String(p.id)] =
@@ -325,7 +328,6 @@ function buildProgressionSeries(
           ? p.rating_defender
           : p.rating_singles;
   }
-  // walk relevant matches in reverse to figure out each player's starting rating
   const startingRating: Record<string, number> = { ...current };
   for (const m of [...relevant].reverse()) {
     for (const mp of m.players) {
@@ -335,7 +337,6 @@ function buildProgressionSeries(
     }
   }
 
-  // Build chart data: x = match index, y = rating per player.
   const initial: Record<string, number | null> = {};
   for (const k of Object.keys(startingRating)) initial[k] = startingRating[k];
 
@@ -354,5 +355,50 @@ function buildProgressionSeries(
     idx++;
   }
 
+  return data;
+}
+
+// "Doppel" view: per player, plot (attacker + defender) / 2 over the timeline
+// of doubles matches. Each match updates the player's attacker OR defender
+// rating depending on the position they played; the unchanged half carries
+// forward.
+function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]) {
+  const relevant = matches
+    .filter((m) => m.mode === 'doubles')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const att: Record<string, number> = {};
+  const def: Record<string, number> = {};
+  for (const p of activePlayers) {
+    att[String(p.id)] = p.rating_attacker;
+    def[String(p.id)] = p.rating_defender;
+  }
+  for (const m of [...relevant].reverse()) {
+    for (const mp of m.players) {
+      const k = String(mp.user_id);
+      if (!(k in att)) continue;
+      if (mp.position === 'attacker') att[k] = mp.rating_before;
+      else if (mp.position === 'defender') def[k] = mp.rating_before;
+    }
+  }
+
+  const avg = (): Record<string, number | null> => {
+    const out: Record<string, number | null> = {};
+    for (const k of Object.keys(att)) out[k] = (att[k] + def[k]) / 2;
+    return out;
+  };
+
+  const data: Array<Record<string, number | null>> = [{ idx: 0, ...avg() }];
+  let idx = 1;
+  for (const m of relevant) {
+    for (const mp of m.players) {
+      const k = String(mp.user_id);
+      if (!(k in att)) continue;
+      if (mp.position === 'attacker') att[k] = mp.rating_after;
+      else if (mp.position === 'defender') def[k] = mp.rating_after;
+    }
+    data.push({ idx, ...avg() });
+    idx++;
+  }
   return data;
 }

@@ -112,4 +112,4 @@ export interface GlobalStats {
   active_players: number;
 }
 
-export type LeaderboardMode = 'attacker' | 'defender' | 'singles';
+export type LeaderboardMode = 'doubles' | 'attacker' | 'defender' | 'singles';
