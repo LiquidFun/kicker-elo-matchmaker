@@ -468,15 +468,17 @@ function Pitch({
       : 'bg-accent text-white ring-accent';
 
   return (
-    <div
-      className="relative min-h-[340px] flex-shrink-0 overflow-hidden text-ink md:min-h-[420px]"
-      style={{
-        backgroundImage: "url('/table.png')",
-        backgroundSize: 'contain',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
-    >
+    <div className="relative min-h-[340px] flex-shrink-0 overflow-hidden text-ink md:min-h-[420px]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 dark:[filter:invert(1)_hue-rotate(180deg)]"
+        style={{
+          backgroundImage: "url('/table.png')",
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
       <div className="absolute inset-0 flex">
         <ScoreColumn
           team={1}
