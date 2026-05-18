@@ -39,6 +39,8 @@ export default function UserProfilePage() {
     return m;
   }, [usersQ.data]);
 
+  const chartData = useMergedHistory(stats.data?.history);
+
   if (stats.isLoading) {
     return <div className="p-6 text-center text-ink2">Lädt …</div>;
   }
@@ -46,9 +48,7 @@ export default function UserProfilePage() {
     return <div className="p-6 text-center text-ink2">Benutzer nicht gefunden</div>;
   }
 
-  const { user, history, totals, top_partners, top_opponents } = stats.data;
-
-  const chartData = useMergedHistory(history);
+  const { user, totals, top_partners, top_opponents } = stats.data;
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto">
@@ -232,12 +232,13 @@ function PeopleList({
   );
 }
 
-function useMergedHistory(history: {
+function useMergedHistory(history?: {
   attacker: { match_id: number; created_at: string; rating_after: number }[];
   defender: { match_id: number; created_at: string; rating_after: number }[];
   singles: { match_id: number; created_at: string; rating_after: number }[];
 }) {
   return useMemo(() => {
+    if (!history) return [];
     const all = [
       ...history.attacker.map((p) => ({ ...p, position: 'attacker' as const })),
       ...history.defender.map((p) => ({ ...p, position: 'defender' as const })),

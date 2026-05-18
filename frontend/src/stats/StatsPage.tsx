@@ -110,6 +110,25 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+type SortKey = 'doppel' | 'attacker' | 'defender' | 'singles';
+type SortDir = 'asc' | 'desc';
+
+function ratingFor(u: User, key: SortKey): number {
+  if (key === 'doppel') return (u.rating_attacker + u.rating_defender) / 2;
+  if (key === 'attacker') return u.rating_attacker;
+  if (key === 'defender') return u.rating_defender;
+  return u.rating_singles;
+}
+
+function gamesFor(u: User, key: SortKey): number {
+  if (key === 'doppel') return u.games_attacker + u.games_defender;
+  if (key === 'attacker') return u.games_attacker;
+  if (key === 'defender') return u.games_defender;
+  return u.games_singles;
+}
+
+const GRID = 'grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3';
+
 function Leaderboard({
   players,
   colorByUserId,
@@ -117,6 +136,30 @@ function Leaderboard({
   players: User[];
   colorByUserId: Map<number, string>;
 }) {
+  const [sortBy, setSortBy] = useState<SortKey>('doppel');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  function toggle(key: SortKey) {
+    if (key === sortBy) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortDir('desc');
+    }
+  }
+
+  const sorted = useMemo(() => {
+    return [...players].sort((a, b) => {
+      // Unrated (no games at this position) sink to the bottom either direction.
+      const aRated = gamesFor(a, sortBy) > 0;
+      const bRated = gamesFor(b, sortBy) > 0;
+      if (aRated !== bRated) return aRated ? -1 : 1;
+      const diff = ratingFor(a, sortBy) - ratingFor(b, sortBy);
+      const cmp = sortDir === 'asc' ? diff : -diff;
+      return cmp !== 0 ? cmp : a.name.localeCompare(b.name);
+    });
+  }, [players, sortBy, sortDir]);
+
   if (players.length === 0) {
     return (
       <div className="px-3 pt-2 text-sm text-ink2">Keine Benutzer.</div>
@@ -125,19 +168,20 @@ function Leaderboard({
   return (
     <div className="px-3">
       <div className="overflow-hidden rounded-xl bg-surface ring-1 ring-line">
-        <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 border-b border-line bg-paper px-3 py-2 text-[10px] uppercase tracking-wider text-ink2">
+        <div className={`${GRID} border-b border-line bg-paper px-3 py-2 text-[10px] uppercase tracking-wider text-ink2`}>
           <div>Spieler</div>
-          <div className="w-12 text-right">Sturm</div>
-          <div className="w-12 text-right">Abwehr</div>
-          <div className="w-12 text-right">Einzel</div>
+          <SortHeader label="Doppel" col="doppel" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
+          <SortHeader label="Sturm" col="attacker" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
+          <SortHeader label="Abwehr" col="defender" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
+          <SortHeader label="Einzel" col="singles" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
         </div>
-        {players.map((u) => {
+        {sorted.map((u) => {
           const color = colorByUserId.get(u.id);
           return (
             <Link
               to={`/stats/users/${u.id}`}
               key={u.id}
-              className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-3 border-b border-line px-3 py-2 last:border-b-0 active:bg-paper"
+              className={`${GRID} border-b border-line px-3 py-2 last:border-b-0 active:bg-paper`}
             >
               <div className="flex min-w-0 items-center gap-2">
                 <Avatar user={u} size="sm" />
@@ -148,6 +192,10 @@ function Leaderboard({
                   {u.name}
                 </div>
               </div>
+              <RatingCell
+                rating={(u.rating_attacker + u.rating_defender) / 2}
+                games={u.games_attacker + u.games_defender}
+              />
               <RatingCell rating={u.rating_attacker} games={u.games_attacker} />
               <RatingCell rating={u.rating_defender} games={u.games_defender} />
               <RatingCell rating={u.rating_singles} games={u.games_singles} />
@@ -156,6 +204,34 @@ function Leaderboard({
         })}
       </div>
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  col,
+  sortBy,
+  sortDir,
+  onClick,
+}: {
+  label: string;
+  col: SortKey;
+  sortBy: SortKey;
+  sortDir: SortDir;
+  onClick: (k: SortKey) => void;
+}) {
+  const active = sortBy === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(col)}
+      className={`w-12 text-right uppercase tracking-wider ${
+        active ? 'font-semibold text-pitch' : 'text-ink2'
+      }`}
+    >
+      {label}
+      <span className="ml-0.5">{active ? (sortDir === 'desc' ? '▼' : '▲') : ''}</span>
+    </button>
   );
 }
 
