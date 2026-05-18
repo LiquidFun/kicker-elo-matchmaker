@@ -22,7 +22,7 @@ def _get_goals_to_win(db: Session) -> int:
 
 @router.get("")
 def get_settings_endpoint(
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> schemas.SettingsOut:
     return schemas.SettingsOut(default_goals_to_win=_get_goals_to_win(db))

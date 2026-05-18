@@ -16,6 +16,16 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: kicker
+            path: /srv/kicker
+            service: kicker
+          - name: kicker-public
+            path: /srv/kicker-public
+            service: kicker-public
     steps:
       - uses: actions/checkout@v4
 
@@ -50,16 +60,17 @@ jobs:
             --exclude '.venv' --exclude '__pycache__' --exclude '*.db' \
             --exclude '*.db-shm' --exclude '*.db-wal' \
             --exclude 'tests' --exclude 'storage' \
-            backend/ "deploy-kicker@$SSH_HOST:/srv/kicker/backend/"
+            backend/ "deploy-kicker@$SSH_HOST:${{ matrix.target.path }}/backend/"
 
       - name: Rsync frontend build
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          rsync -az --delete frontend/dist/ "deploy-kicker@$SSH_HOST:/srv/kicker/frontend/dist/"
+          rsync -az --delete frontend/dist/ "deploy-kicker@$SSH_HOST:${{ matrix.target.path }}/frontend/dist/"
 
       - name: Install backend deps and restart service
         env:
           SSH_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          ssh "deploy-kicker@$SSH_HOST" "cd /srv/kicker/backend && uv sync && sudo systemctl restart kicker"
+          ssh "deploy-kicker@$SSH_HOST" \
+            "cd ${{ matrix.target.path }}/backend && uv sync && sudo systemctl restart ${{ matrix.target.service }}"

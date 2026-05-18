@@ -98,7 +98,7 @@ def _build_singles_lineup(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_match(
     payload: schemas.MatchCreateIn,
-    actor: models.User = Depends(auth.get_current_user),
+    actor: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> schemas.MatchOut:
     _validate_lineup(payload)
@@ -119,7 +119,7 @@ def create_match(
         team1_score=payload.team1_score,
         team2_score=payload.team2_score,
         winner_team=winner_team,
-        created_by_user_id=actor.id,
+        created_by_user_id=actor.id if actor is not None else None,
     )
     db.add(match)
     db.flush()
@@ -150,7 +150,7 @@ def create_match(
 
 @router.get("")
 def list_matches(
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=500),
     user_id: int | None = None,
@@ -166,7 +166,7 @@ def list_matches(
 @router.get("/{match_id}")
 def get_match(
     match_id: int,
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> schemas.MatchOut:
     m = db.get(models.Match, match_id)

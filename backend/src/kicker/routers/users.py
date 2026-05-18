@@ -45,7 +45,7 @@ def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
 
 @router.get("")
 def list_users(
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> list[schemas.UserOut]:
     rows = (

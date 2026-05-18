@@ -74,23 +74,49 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=_settings.cookie_name, path="/")
 
 
+def _resolve_session_user(db: SASession, session_id: str | None) -> models.User | None:
+    if not session_id:
+        return None
+    sess = db.get(models.Session, session_id)
+    now = datetime.now(UTC)
+    if not sess or sess.expires_at.replace(tzinfo=UTC) < now:
+        return None
+    user = db.get(models.User, sess.user_id)
+    if not user or user.deleted_at is not None:
+        return None
+    sess.last_seen_at = now
+    db.commit()
+    return user
+
+
 def get_current_user(
     request: Request,
     db: SASession = Depends(get_db),
     session_id: str | None = Cookie(default=None, alias=_settings.cookie_name),
 ) -> models.User:
-    if not session_id:
+    user = _resolve_session_user(db, session_id)
+    if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    sess = db.get(models.Session, session_id)
-    now = datetime.now(UTC)
-    if not sess or sess.expires_at.replace(tzinfo=UTC) < now:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
-    user = db.get(models.User, sess.user_id)
-    if not user or user.deleted_at is not None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    sess.last_seen_at = now
-    db.commit()
     return user
+
+
+def public_or_user(
+    request: Request,
+    db: SASession = Depends(get_db),
+    session_id: str | None = Cookie(default=None, alias=_settings.cookie_name),
+) -> models.User | None:
+    """Allow anonymous access when ``public_mode`` is on, else require a session.
+
+    Returns the resolved user, or ``None`` for anonymous calls in public mode.
+    Endpoints that need to attribute writes (e.g. ``created_by_user_id``) should
+    fall back to ``None`` when the actor is anonymous.
+    """
+    user = _resolve_session_user(db, session_id)
+    if user is not None:
+        return user
+    if _settings.public_mode:
+        return None
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 
 def require_admin(user: models.User = Depends(get_current_user)) -> models.User:

@@ -1,4 +1,4 @@
-# Kicker
+# Kicker - try the public instance at [kicker-public.brutenis.net](https://kicker-public.brutenis.net)
 
 Foosball elo tracker used to find the fairest matching.
 

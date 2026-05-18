@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useLogout } from '../api/hooks';
 import type { User } from '../api/types';
 
-export default function AppLayout({ user }: { user: User }) {
+export default function AppLayout({ user }: { user: User | null }) {
   const logout = useLogout();
 
   const navItem =
@@ -30,19 +30,30 @@ export default function AppLayout({ user }: { user: User }) {
         >
           Statistik
         </NavLink>
-        <NavLink
-          to="/admin/users"
-          className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
-        >
-          Verwaltung
-        </NavLink>
-        <button
-          onClick={() => logout.mutate()}
-          className={`${navItem} ${navInactive}`}
-          aria-label="Abmelden"
-        >
-          {user.name.split(' ')[0]} ↗
-        </button>
+        {user && (
+          <NavLink
+            to="/admin/users"
+            className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
+          >
+            Verwaltung
+          </NavLink>
+        )}
+        {user ? (
+          <button
+            onClick={() => logout.mutate()}
+            className={`${navItem} ${navInactive}`}
+            aria-label="Abmelden"
+          >
+            {user.name.split(' ')[0]} ↗
+          </button>
+        ) : (
+          <NavLink
+            to="/login"
+            className={({ isActive }) => `${navItem} ${isActive ? navActive : navInactive}`}
+          >
+            Anmelden
+          </NavLink>
+        )}
       </nav>
     </div>
   );

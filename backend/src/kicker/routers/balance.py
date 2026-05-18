@@ -48,7 +48,7 @@ def _lineup_to_schema(lu: elo.Lineup) -> schemas.LineupOut:
 @router.post("/balance")
 def balance(
     payload: schemas.BalanceIn,
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> schemas.BalanceOut:
     if len(set(payload.player_ids)) != 4:
@@ -65,7 +65,7 @@ def balance(
 @router.post("/preview")
 def preview(
     payload: schemas.PreviewIn,
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> schemas.PreviewOut:
     ids = [p.user_id for p in payload.players]

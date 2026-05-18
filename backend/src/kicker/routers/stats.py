@@ -33,7 +33,7 @@ def _games_column(mode: Mode):
 def leaderboard(
     mode: Mode = Query("attacker"),
     limit: int = Query(100, ge=1, le=500),
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ) -> list[schemas.UserOut]:
     rating = _rating_column(mode)
@@ -51,7 +51,7 @@ def leaderboard(
 @router.get("/users/{user_id}")
 def user_stats(
     user_id: int,
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ):
     user = db.get(models.User, user_id)
@@ -110,7 +110,7 @@ def user_stats(
 
 @router.get("/global")
 def global_stats(
-    _: models.User = Depends(auth.get_current_user),
+    _: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
 ):
     doubles = db.query(models.Match).filter(models.Match.mode == "doubles").count()

@@ -89,3 +89,12 @@ def logout(response: Response, request: Request, db: Session = Depends(get_db)) 
 @router.get("/me")
 def me(user: models.User = Depends(auth.get_current_user)) -> schemas.UserOut:
     return schemas.UserOut.from_user(user)
+
+
+config_router = APIRouter(prefix="/api/config", tags=["config"])
+
+
+@config_router.get("")
+def app_config() -> dict:
+    """Public — no auth. Lets the frontend learn whether it's a public instance."""
+    return {"public_mode": get_settings().public_mode}

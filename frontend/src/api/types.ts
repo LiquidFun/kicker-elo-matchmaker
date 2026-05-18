@@ -113,3 +113,7 @@ export interface GlobalStats {
 }
 
 export type LeaderboardMode = 'doubles' | 'attacker' | 'defender' | 'singles';
+
+export interface AppConfig {
+  public_mode: boolean;
+}

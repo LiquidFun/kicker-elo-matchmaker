@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(auth_router.router)
+    app.include_router(auth_router.config_router)
     app.include_router(users_router.router)
     app.include_router(users_router.password_router)
     app.include_router(matches_router.router)

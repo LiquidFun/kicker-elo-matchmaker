@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     cookie_name: str = "kicker_session"
     storage_dir: str = "./storage"
     avatar_max_bytes: int = 2 * 1024 * 1024
+    # Public-demo mode: skip auth on read endpoints and on match creation,
+    # so anonymous visitors can try the app. Admin login is still required
+    # for user management, match deletion, and settings changes.
+    public_mode: bool = False
 
 
 @lru_cache

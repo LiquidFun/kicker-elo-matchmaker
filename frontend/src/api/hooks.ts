@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from './client';
 import type {
+  AppConfig,
   BalanceResult,
   GlobalStats,
   LeaderboardMode,
@@ -13,6 +14,13 @@ import type {
   UserCreateResult,
   UserStats,
 } from './types';
+
+export const useAppConfig = () =>
+  useQuery<AppConfig>({
+    queryKey: ['app-config'],
+    queryFn: () => api.get<AppConfig>('/api/config'),
+    staleTime: Infinity,
+  });
 
 export const useMe = () =>
   useQuery<User | null>({
