@@ -44,6 +44,39 @@ function slotTeam(slot: SlotKey): 1 | 2 {
   return slot.startsWith('team1') ? 1 : 2;
 }
 
+function buildMatchupSentence(
+  mode: Mode,
+  slots: Record<SlotKey, number | null>,
+  usersById: Record<number, User>,
+  ballTeam: 1 | 2 | null,
+): string | null {
+  const first: 1 | 2 = ballTeam ?? 1;
+  const other: 1 | 2 = first === 1 ? 2 : 1;
+  const name = (slot: SlotKey): string | null => {
+    const id = slots[slot];
+    return id != null ? usersById[id]?.name ?? null : null;
+  };
+  if (mode === 'singles') {
+    const a = name(`team${first}.singles`);
+    const b = name(`team${other}.singles`);
+    return a && b ? `${a} gegen ${b}` : null;
+  }
+  const fa = name(`team${first}.attacker`);
+  const fd = name(`team${first}.defender`);
+  const oa = name(`team${other}.attacker`);
+  const od = name(`team${other}.defender`);
+  if (!fa || !fd || !oa || !od) return null;
+  return `${fa} mit ${fd} gegen ${oa} mit ${od}`;
+}
+
+function speakGerman(text: string): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'de-DE';
+  window.speechSynthesis.speak(u);
+}
+
 export default function MatchBuilderPage() {
   const me = useMe();
   const usersQ = useUsers();
@@ -168,6 +201,18 @@ export default function MatchBuilderPage() {
     mode === 'singles'
       ? winProb !== null
       : isOptimalDoublesLineup(usersById, slots);
+  // Kicker convention: the weaker team gets the initial kickoff.
+  const ballTeam: 1 | 2 | null =
+    team1Rating == null || team2Rating == null || team1Rating === team2Rating
+      ? null
+      : team1Rating < team2Rating
+        ? 1
+        : 2;
+
+  function onSpeak() {
+    const sentence = buildMatchupSentence(mode, slots, usersById, ballTeam);
+    if (sentence) speakGerman(sentence);
+  }
 
   // Auto-balance only after a tap (which doesn't choose a position). Dragging
   // a player to a specific slot is an explicit role assignment — leave it.
@@ -282,6 +327,7 @@ export default function MatchBuilderPage() {
             lookupTeamDelta={lookupTeamDelta}
             team1Rating={team1Rating}
             team2Rating={team2Rating}
+            ballTeam={ballTeam}
             isBalanced={isBalanced}
             canBalance={
               mode === 'doubles' && slotsForMode('doubles').every((k) => slots[k] != null)
@@ -289,6 +335,8 @@ export default function MatchBuilderPage() {
             isBalancing={balance.isPending}
             onBalance={onBalance}
             onOpenSettings={() => setSettingsOpen(true)}
+            onSpeak={onSpeak}
+            canSpeak={complete}
             onSlotTap={(slot) => {
               if (slots[slot] != null) {
                 lastInteractionRef.current = 'tap';
@@ -366,11 +414,14 @@ function Pitch({
   lookupTeamDelta,
   team1Rating,
   team2Rating,
+  ballTeam,
   isBalanced,
   canBalance,
   isBalancing,
   onBalance,
   onOpenSettings,
+  onSpeak,
+  canSpeak,
   onSlotTap,
   onPickScore,
   complete,
@@ -393,11 +444,14 @@ function Pitch({
   ) => number | undefined;
   team1Rating: number | null;
   team2Rating: number | null;
+  ballTeam: 1 | 2 | null;
   isBalanced: boolean;
   canBalance: boolean;
   isBalancing: boolean;
   onBalance: () => void;
   onOpenSettings: () => void;
+  onSpeak: () => void;
+  canSpeak: boolean;
   onSlotTap: (slot: SlotKey) => void;
   onPickScore: (team: 1 | 2, score: number) => void;
   complete: boolean;
@@ -412,14 +466,6 @@ function Pitch({
     : isBalanced
       ? 'bg-pitch text-white ring-pitch'
       : 'bg-accent text-white ring-accent';
-
-  // Kicker convention: the weaker team gets the initial kickoff.
-  const ballTeam: 1 | 2 | null =
-    team1Rating == null || team2Rating == null || team1Rating === team2Rating
-      ? null
-      : team1Rating < team2Rating
-        ? 1
-        : 2;
 
   return (
     <div
@@ -487,6 +533,16 @@ function Pitch({
             </button>
             <div className="flex-1" aria-hidden />
             <button
+              onClick={onSpeak}
+              disabled={!canSpeak}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-pitch shadow ring-1 ring-line disabled:cursor-not-allowed disabled:text-ink2 disabled:opacity-60 md:h-12 md:w-12"
+              aria-label="Aufstellung vorlesen"
+              title="Aufstellung vorlesen"
+            >
+              <SpeakerIcon />
+            </button>
+            <div className="mt-2" aria-hidden />
+            <button
               onClick={onOpenSettings}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-pitch shadow ring-1 ring-line md:h-12 md:w-12"
               aria-label="Einstellungen"
@@ -517,6 +573,25 @@ function Pitch({
         />
       </div>
     </div>
+  );
+}
+
+function SpeakerIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5 md:h-6 md:w-6"
+    >
+      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.08" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
   );
 }
 
