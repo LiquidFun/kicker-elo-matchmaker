@@ -4,6 +4,8 @@ import pytest
 
 from kicker.elo import (
     K_FACTOR,
+    PROVISIONAL_BONUS,
+    PROVISIONAL_GAMES,
     DoublesLineup,
     PlayerRatings,
     SinglesLineup,
@@ -12,6 +14,7 @@ from kicker.elo import (
     doubles_deltas,
     enumerate_doubles_lineups,
     expected_score,
+    k_for_games,
     preview_outcomes,
     singles_deltas,
 )
@@ -149,6 +152,43 @@ def test_favorite_loses_when_barely_winning():
     # favorite drops rating because they were supposed to win by more.
     delta_favorite = compute_delta(1900, 1500, 5, 4)
     assert delta_favorite < 0
+
+
+def test_k_for_games_endpoints():
+    assert k_for_games(0) == pytest.approx(K_FACTOR + PROVISIONAL_BONUS)
+    assert k_for_games(PROVISIONAL_GAMES) == K_FACTOR
+    assert k_for_games(PROVISIONAL_GAMES * 5) == K_FACTOR
+    # Linear in between.
+    mid = k_for_games(PROVISIONAL_GAMES // 2)
+    assert mid == pytest.approx(K_FACTOR + PROVISIONAL_BONUS / 2)
+
+
+def test_rookie_singles_swing_is_larger_than_veteran():
+    rookie = PlayerRatings(
+        user_id=1, attacker=1000, defender=1000, singles=1000,
+        games_attacker=0, games_defender=0, games_singles=0,
+    )
+    veteran = pr(2)  # defaults to established
+    deltas = singles_deltas(SinglesLineup(rookie, veteran), 5, 4)
+    rookie_delta = deltas[(1, "singles")]
+    veteran_delta = deltas[(2, "singles")]
+    # Same diff, scaled by K(0)=64 vs K(established)=32 → exactly 2x.
+    assert abs(rookie_delta) == pytest.approx(2 * abs(veteran_delta))
+
+
+def test_rookie_doubles_teammate_moves_more_than_veteran_teammate():
+    rookie = PlayerRatings(
+        user_id=1, attacker=1000, defender=1000, singles=1000,
+        games_attacker=0, games_defender=0, games_singles=0,
+    )
+    vet_partner = pr(2)
+    vet_a = pr(3)
+    vet_b = pr(4)
+    deltas = doubles_deltas(
+        DoublesLineup(rookie, vet_partner, vet_a, vet_b), 5, 4
+    )
+    # Both team-1 players see the same diff sign; rookie's |delta| is 2x.
+    assert abs(deltas[(1, "attacker")]) == pytest.approx(2 * abs(deltas[(2, "defender")]))
 
 
 def test_underdog_still_loses_on_blowout():

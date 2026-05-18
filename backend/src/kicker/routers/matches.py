@@ -65,6 +65,9 @@ def _player_ratings(users: dict[int, models.User]) -> dict[int, elo.PlayerRating
             attacker=u.rating_attacker,
             defender=u.rating_defender,
             singles=u.rating_singles,
+            games_attacker=u.games_attacker,
+            games_defender=u.games_defender,
+            games_singles=u.games_singles,
         )
         for u in users.values()
     }

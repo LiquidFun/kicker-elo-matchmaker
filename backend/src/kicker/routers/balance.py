@@ -27,6 +27,9 @@ def _to_ratings(users: list[models.User]) -> list[elo.PlayerRatings]:
             attacker=u.rating_attacker,
             defender=u.rating_defender,
             singles=u.rating_singles,
+            games_attacker=u.games_attacker,
+            games_defender=u.games_defender,
+            games_singles=u.games_singles,
         )
         for u in users
     ]
@@ -80,6 +83,9 @@ def preview(
             attacker=u.rating_attacker,
             defender=u.rating_defender,
             singles=u.rating_singles,
+            games_attacker=u.games_attacker,
+            games_defender=u.games_defender,
+            games_singles=u.games_singles,
         )
         for uid, u in users.items()
     }

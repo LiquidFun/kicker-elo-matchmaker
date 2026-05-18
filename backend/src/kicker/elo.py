@@ -26,6 +26,12 @@ INITIAL_RATING = 1600.0
 # on a close 4-5 loss; pure binary would never allow that, pure goal-ratio
 # would shrink balanced 5-4 deltas to ~1.8.
 WIN_WEIGHT = 0.2
+# Provisional period: a player's first PROVISIONAL_GAMES games at a position
+# use a boosted K so the rating converges faster. K starts at
+# K_FACTOR + PROVISIONAL_BONUS and decays linearly to K_FACTOR. Each position
+# is tracked independently — a doubles veteran is still provisional at singles.
+PROVISIONAL_GAMES = 10
+PROVISIONAL_BONUS = 32.0
 
 Position = Literal["attacker", "defender", "singles"]
 
@@ -35,16 +41,26 @@ def expected_score(rating_a: float, rating_b: float) -> float:
     return 1.0 / (1.0 + 10.0 ** ((rating_b - rating_a) / 400.0))
 
 
-def compute_delta(
-    rating_a: float, rating_b: float, score_a: int, score_b: int, k: float = K_FACTOR
-) -> float:
-    """Delta applied to side A's rating. Side B gets the negation."""
+def k_for_games(games: int) -> float:
+    if games >= PROVISIONAL_GAMES:
+        return K_FACTOR
+    return K_FACTOR + PROVISIONAL_BONUS * (1.0 - games / PROVISIONAL_GAMES)
+
+
+def compute_diff(rating_a: float, rating_b: float, score_a: int, score_b: int) -> float:
+    """Side A's (actual − expected); multiply by K to get a rating delta."""
     total = score_a + score_b
     ratio = 0.5 if total == 0 else score_a / total
     binary = 1.0 if score_a > score_b else 0.0 if score_a < score_b else 0.5
     actual = WIN_WEIGHT * binary + (1.0 - WIN_WEIGHT) * ratio
-    expected = expected_score(rating_a, rating_b)
-    return k * (actual - expected)
+    return actual - expected_score(rating_a, rating_b)
+
+
+def compute_delta(
+    rating_a: float, rating_b: float, score_a: int, score_b: int, k: float = K_FACTOR
+) -> float:
+    """Delta applied to side A's rating with a single uniform K."""
+    return k * compute_diff(rating_a, rating_b, score_a, score_b)
 
 
 @dataclass(frozen=True)
@@ -53,6 +69,11 @@ class PlayerRatings:
     attacker: float
     defender: float
     singles: float
+    # Default to the established threshold so existing tests that don't care
+    # about the provisional path keep getting K=K_FACTOR.
+    games_attacker: int = PROVISIONAL_GAMES
+    games_defender: int = PROVISIONAL_GAMES
+    games_singles: int = PROVISIONAL_GAMES
 
 
 @dataclass(frozen=True)
@@ -96,27 +117,31 @@ def doubles_deltas(
 ) -> dict[tuple[int, Position], float]:
     """Return {(user_id, position): delta} for a doubles match.
 
-    The same delta applies to both members of each team — by construction
-    the team's expected score is shared.
+    Each player's delta is `±diff · K(games_at_position)`, so a rookie moves
+    more than a veteran even when they're teammates. The sign flips between
+    teams; magnitudes can differ per player.
     """
-    delta_team1 = compute_delta(
+    diff = compute_diff(
         lineup.team1_rating, lineup.team2_rating, team1_score, team2_score
     )
+    t1a, t1d = lineup.team1_attacker, lineup.team1_defender
+    t2a, t2d = lineup.team2_attacker, lineup.team2_defender
     return {
-        (lineup.team1_attacker.user_id, "attacker"): delta_team1,
-        (lineup.team1_defender.user_id, "defender"): delta_team1,
-        (lineup.team2_attacker.user_id, "attacker"): -delta_team1,
-        (lineup.team2_defender.user_id, "defender"): -delta_team1,
+        (t1a.user_id, "attacker"): k_for_games(t1a.games_attacker) * diff,
+        (t1d.user_id, "defender"): k_for_games(t1d.games_defender) * diff,
+        (t2a.user_id, "attacker"): -k_for_games(t2a.games_attacker) * diff,
+        (t2d.user_id, "defender"): -k_for_games(t2d.games_defender) * diff,
     }
 
 
 def singles_deltas(
     lineup: SinglesLineup, p1_score: int, p2_score: int
 ) -> dict[tuple[int, Position], float]:
-    delta = compute_delta(lineup.team1_rating, lineup.team2_rating, p1_score, p2_score)
+    diff = compute_diff(lineup.team1_rating, lineup.team2_rating, p1_score, p2_score)
+    p1, p2 = lineup.player1, lineup.player2
     return {
-        (lineup.player1.user_id, "singles"): delta,
-        (lineup.player2.user_id, "singles"): -delta,
+        (p1.user_id, "singles"): k_for_games(p1.games_singles) * diff,
+        (p2.user_id, "singles"): -k_for_games(p2.games_singles) * diff,
     }
 
 
@@ -186,9 +211,8 @@ def preview_outcomes(
     """Return (win_prob_team1, list of (t1_score, t2_score, {user_id: delta})).
 
     Generates the standard 'win to N, opponent had M' outcomes for M = 0..N-1
-    on each side. For doubles, each player's delta is the team delta — we
-    don't split by position because both teammates' position ratings move by
-    the same amount.
+    on each side. Each player's delta is scaled by their own K (provisional
+    players see larger swings), so teammates' values may differ.
     """
     win_prob = lineup.win_prob_team1()
     outcomes: list[tuple[int, int, dict[int, float]]] = []
