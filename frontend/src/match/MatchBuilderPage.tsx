@@ -407,6 +407,14 @@ function Pitch({
       ? 'bg-pitch text-white ring-pitch'
       : 'bg-accent text-white ring-accent';
 
+  // Kicker convention: the weaker team gets the initial kickoff.
+  const ballTeam: 1 | 2 | null =
+    team1Rating == null || team2Rating == null || team1Rating === team2Rating
+      ? null
+      : team1Rating < team2Rating
+        ? 1
+        : 2;
+
   return (
     <div
       className="relative min-h-[340px] flex-shrink-0 overflow-hidden text-ink md:min-h-[420px]"
@@ -435,6 +443,7 @@ function Pitch({
             usersById={usersById}
             teamRating={team1Rating}
             isWinner={loserTeam === 2}
+            hasBall={ballTeam === 1}
             onSlotTap={onSlotTap}
           />
           <div className="flex w-20 shrink-0 flex-col items-center py-8 md:w-32">
@@ -487,6 +496,7 @@ function Pitch({
             usersById={usersById}
             teamRating={team2Rating}
             isWinner={loserTeam === 1}
+            hasBall={ballTeam === 2}
             onSlotTap={onSlotTap}
           />
         </div>
@@ -558,6 +568,32 @@ function CheckIcon() {
   );
 }
 
+function BallIcon() {
+  // Classic soccer-ball schematic: central black pentagon with five edges
+  // extending to the rim, suggesting the surrounding hexagons.
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      aria-label="Anstoß"
+    >
+      <circle cx="12" cy="12" r="9" fill="#ffffff" stroke="#1a1a1a" strokeWidth="1.3" />
+      <polygon
+        points="12,8 15.8,10.76 14.35,15.24 9.65,15.24 8.2,10.76"
+        fill="#1a1a1a"
+      />
+      <g stroke="#1a1a1a" strokeWidth="1" strokeLinecap="round">
+        <line x1="12" y1="8" x2="12" y2="3.2" />
+        <line x1="15.8" y1="10.76" x2="20.56" y2="9.22" />
+        <line x1="14.35" y1="15.24" x2="17.29" y2="19.28" />
+        <line x1="9.65" y1="15.24" x2="6.71" y2="19.28" />
+        <line x1="8.2" y1="10.76" x2="3.44" y2="9.22" />
+      </g>
+    </svg>
+  );
+}
+
 function ScalesIcon() {
   return (
     <svg
@@ -587,6 +623,7 @@ function TeamColumn({
   usersById,
   teamRating,
   isWinner,
+  hasBall,
   onSlotTap,
 }: {
   team: 1 | 2;
@@ -595,6 +632,7 @@ function TeamColumn({
   usersById: Record<number, User>;
   teamRating: number | null;
   isWinner: boolean;
+  hasBall: boolean;
   onSlotTap: (slot: SlotKey) => void;
 }) {
   const keys: SlotKey[] =
@@ -609,11 +647,12 @@ function TeamColumn({
   return (
     <div className="relative flex flex-1 flex-col gap-2">
       <div
-        className={`mx-auto w-fit rounded-full px-2 py-0.5 text-[11px] tabular-nums shadow-sm ring-1 ring-line ${
+        className={`mx-auto flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] tabular-nums shadow-sm ring-1 ring-line ${
           teamRating == null ? 'bg-surface text-ink2' : 'bg-surface text-ink'
         }`}
       >
-        Ø {teamRating == null ? '—' : Math.round(teamRating)}
+        {hasBall && <BallIcon />}
+        <span>Ø {teamRating == null ? '—' : Math.round(teamRating)}</span>
       </div>
       {isWinner && (
         <div className="absolute right-1 top-1 z-10 rounded-full bg-pitch px-2 py-0.5 text-[10px] font-bold text-white">
