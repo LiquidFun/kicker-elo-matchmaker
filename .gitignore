@@ -30,3 +30,6 @@ dist/
 logs/
 backend/storage
 old-page
+
+frontend/public/avatars/
+backend/src/kicker/seed_legacy.py
