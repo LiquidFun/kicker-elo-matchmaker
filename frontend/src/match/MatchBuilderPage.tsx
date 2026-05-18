@@ -25,7 +25,7 @@ import RosterTile from './RosterTile';
 import SessionHistory from './SessionHistory';
 import SettingsModal from './SettingsModal';
 import Slot from './Slot';
-import { teamRating, winProbTeam1 } from './elo';
+import { isOptimalDoublesLineup, teamRating, winProbTeam1 } from './elo';
 import {
   SlotKey,
   findSlotOfPlayer,
@@ -160,8 +160,14 @@ export default function MatchBuilderPage() {
   const winProb = winProbTeam1(usersById, slots, mode);
   const team1Rating = teamRating(usersById, slots, 1, mode);
   const team2Rating = teamRating(usersById, slots, 2, mode);
-  // "balanced" = within 5 percentage points of 50/50 win probability.
-  const isBalanced = winProb !== null && Math.abs(winProb - 0.5) < 0.05;
+  // "balanced" = this arrangement is the fairest split of the 4 selected
+  // players (i.e. the balance button can't improve it). For singles there
+  // are only two ways to assign sides, both with the same |p − 0.5|, so the
+  // current lineup is always optimal once both seats are filled.
+  const isBalanced =
+    mode === 'singles'
+      ? winProb !== null
+      : isOptimalDoublesLineup(usersById, slots);
 
   // Auto-balance only after a tap (which doesn't choose a position). Dragging
   // a player to a specific slot is an explicit role assignment — leave it.

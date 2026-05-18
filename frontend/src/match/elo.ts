@@ -43,3 +43,54 @@ export const winProbTeam1 = (
 };
 
 export { slotRating };
+
+// True iff the current doubles lineup minimizes |win_prob − 0.5| among all
+// 12 ways to arrange the 4 selected players (3 partitions × 2 attacker/defender
+// orderings per team). Returns false if any slot is empty.
+export const isOptimalDoublesLineup = (
+  users: Record<number, User>,
+  slots: Record<SlotKey, number | null>,
+): boolean => {
+  const ids = [
+    slots['team1.attacker'],
+    slots['team1.defender'],
+    slots['team2.attacker'],
+    slots['team2.defender'],
+  ];
+  if (ids.some((id) => id == null)) return false;
+  const us = ids.map((id) => users[id as number]);
+  if (us.some((u) => !u)) return false;
+
+  const dev = (a: User, d: User, oa: User, od: User): number => {
+    const r1 = (a.rating_attacker + d.rating_defender) / 2;
+    const r2 = (oa.rating_attacker + od.rating_defender) / 2;
+    return Math.abs(expectedScore(r1, r2) - 0.5);
+  };
+
+  const currentDev = dev(us[0], us[1], us[2], us[3]);
+
+  // 3 ways to split 4 players into two pairs of 2.
+  const partitions: ReadonlyArray<readonly [number, number, number, number]> = [
+    [0, 1, 2, 3],
+    [0, 2, 1, 3],
+    [0, 3, 1, 2],
+  ];
+
+  let bestDev = Infinity;
+  for (const [i, j, k, l] of partitions) {
+    for (const [t1A, t1D] of [
+      [i, j],
+      [j, i],
+    ] as const) {
+      for (const [t2A, t2D] of [
+        [k, l],
+        [l, k],
+      ] as const) {
+        const d = dev(us[t1A], us[t1D], us[t2A], us[t2D]);
+        if (d < bestDev) bestDev = d;
+      }
+    }
+  }
+
+  return currentDev <= bestDev + 1e-9;
+};
