@@ -13,6 +13,7 @@ import {
 import { useGlobalStats, useMatches, useUsers } from '../api/hooks';
 import type { LeaderboardMode, Match, User } from '../api/types';
 import Avatar from '../match/Avatar';
+import { cssVar, useTheme } from '../theme';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -28,7 +29,7 @@ const MODE_TABS: { mode: LeaderboardMode; label: string }[] = [
 ];
 
 // Warm/earth palette — only shades of green, orange, beige, brown. No blues.
-const LINE_COLORS = [
+const LINE_COLORS_LIGHT = [
   '#1a3d2e', // pitch green
   '#d97706', // accent orange
   '#c9a36c', // beige
@@ -41,11 +42,28 @@ const LINE_COLORS = [
   '#a8946c', // tan
 ];
 
+// Dark-mode siblings: the two darkest hues (#1a3d2e, #5b3a1f) are replaced with
+// lighter variants so all lines stay visible against the dark surface.
+const LINE_COLORS_DARK = [
+  '#4ade80', // brighter green
+  '#f59e0b', // accent orange
+  '#c9a36c', // beige
+  '#a8825a', // lighter wood
+  '#6fbb8e', // light pitch
+  '#e07e2a', // deep orange
+  '#a3b87a', // olive
+  '#e09a7d', // terracotta
+  '#a8825a', // lighter dark wood
+  '#c4b08a', // tan
+];
+
 export default function StatsPage() {
   const usersQ = useUsers();
   const matchesQ = useMatches(undefined, 200);
   const globalQ = useGlobalStats();
   const [chartMode, setChartMode] = useState<LeaderboardMode>('doubles');
+  const [theme] = useTheme();
+  const LINE_COLORS = theme === 'dark' ? LINE_COLORS_DARK : LINE_COLORS_LIGHT;
 
   const players = useMemo(() => {
     const data = usersQ.data ?? [];
@@ -69,7 +87,7 @@ export default function StatsPage() {
     const m = new Map<number, string>();
     activeInMode.forEach((p, i) => m.set(p.id, LINE_COLORS[i % LINE_COLORS.length]));
     return m;
-  }, [activeInMode]);
+  }, [activeInMode, LINE_COLORS]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
@@ -302,16 +320,20 @@ function ProgressionChart({
       <div className="h-56 rounded-xl bg-surface p-2 ring-1 ring-line">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 28, bottom: 4, left: 0 }}>
-            <CartesianGrid stroke="#e7e0cf" />
+            <CartesianGrid stroke={cssVar('line')} />
             <XAxis dataKey="idx" hide />
             <YAxis
               domain={['auto', 'auto']}
               width={40}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: cssVar('ink2'), fontSize: 11 }}
             />
             <Tooltip
-              contentStyle={{ background: '#ffffff', border: '1px solid #e7e0cf' }}
-              labelStyle={{ color: '#6b7280' }}
+              contentStyle={{
+                background: cssVar('surface'),
+                border: `1px solid ${cssVar('line')}`,
+                color: cssVar('ink'),
+              }}
+              labelStyle={{ color: cssVar('ink2') }}
               formatter={(value, name) => {
                 const p = activePlayers.find((p) => String(p.id) === name);
                 return [Math.round(Number(value)), p?.name ?? name];
@@ -368,7 +390,7 @@ function EndAvatar({
   const x = cx + 4;
   return (
     <g>
-      <circle cx={x} cy={cy} r={r + 1} fill="#ffffff" stroke={color} strokeWidth={1.5} />
+      <circle cx={x} cy={cy} r={r + 1} fill={cssVar('surface')} stroke={color} strokeWidth={1.5} />
       <text
         x={x}
         y={cy}

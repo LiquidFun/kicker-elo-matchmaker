@@ -13,12 +13,13 @@ import {
 import { useMatches, useUserStats, useUsers } from '../api/hooks';
 import type { Position, User } from '../api/types';
 import Avatar from '../match/Avatar';
+import { cssVar, useTheme } from '../theme';
 
-const POS_COLOR: Record<Position, string> = {
-  attacker: '#d97706', // orange
-  defender: '#1a3d2e', // pitch green
-  singles: '#8b6440',  // wood brown
-};
+const posColors = (): Record<Position, string> => ({
+  attacker: cssVar('accent'),
+  defender: cssVar('pitch'),
+  singles: cssVar('wood'),
+});
 
 const POS_LABEL: Record<Position, string> = {
   attacker: 'Sturm',
@@ -32,6 +33,8 @@ export default function UserProfilePage() {
   const stats = useUserStats(id);
   const usersQ = useUsers();
   const matchesQ = useMatches(id, 10);
+  useTheme(); // re-render on theme change so chart colors refresh
+  const POS_COLOR = posColors();
 
   const usersById = useMemo(() => {
     const m: Record<number, User> = {};
@@ -78,16 +81,20 @@ export default function UserProfilePage() {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid stroke="#e7e0cf" />
+                <CartesianGrid stroke={cssVar('line')} />
                 <XAxis dataKey="idx" hide />
                 <YAxis
                   domain={['auto', 'auto']}
                   width={36}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
+                  tick={{ fill: cssVar('ink2'), fontSize: 11 }}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#ffffff', border: '1px solid #e7e0cf' }}
-                  labelStyle={{ color: '#6b7280' }}
+                  contentStyle={{
+                    background: cssVar('surface'),
+                    border: `1px solid ${cssVar('line')}`,
+                    color: cssVar('ink'),
+                  }}
+                  labelStyle={{ color: cssVar('ink2') }}
                 />
                 <Line
                   type="monotone"

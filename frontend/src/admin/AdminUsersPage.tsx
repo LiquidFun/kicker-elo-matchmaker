@@ -279,15 +279,15 @@ function CreateUserModal({
       <style>{`
         .input {
           width: 100%;
-          background: #f7f3ea;
-          color: #1c1c1c;
+          background: rgb(var(--c-paper));
+          color: rgb(var(--c-ink));
           border-radius: 8px;
           padding: 8px 12px;
           outline: none;
-          box-shadow: inset 0 0 0 1px #e7e0cf;
+          box-shadow: inset 0 0 0 1px rgb(var(--c-line));
         }
         .input:focus {
-          box-shadow: inset 0 0 0 1px #1a3d2e;
+          box-shadow: inset 0 0 0 1px rgb(var(--c-pitch));
         }
       `}</style>
     </Modal>

@@ -1,11 +1,14 @@
-"""Seed the public-demo instance: 10 animal players, ~100 simulated games, one admin.
+"""Seed the public-demo instance: 10 animal players + ~500 simulated games.
 
-Idempotent for the player roster (re-running updates names + avatars in place).
-Match simulation is skipped if any matches already exist, so re-running on a
-populated DB won't double-seed games.
+Tiger is the admin (gets the password you pass in); the other nine are
+password-less guests.
+
+Idempotent for the player roster (re-running updates avatars + Tiger's
+password in place). Match simulation is skipped if any matches already exist —
+delete the DB file by hand if you want a clean re-seed.
 
 Usage:
-  uv run python -m kicker.seed_public --admin NAME --admin-password PW [--games N] [--seed S]
+  uv run python -m kicker.seed_public --admin-password PW [--games N] [--seed S]
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from .db import SessionLocal, engine
 from .models import Base, Match, MatchPlayer, User
 
 ANIMAL_ASSETS_DIR = Path(__file__).resolve().parent / "assets" / "animals"
+ADMIN_ANIMAL = "Tiger"
 
 
 @dataclass(frozen=True)
@@ -64,33 +68,33 @@ def _stage_avatar(animal: Animal, storage_dir: Path) -> str:
     return f"/api/avatars/{filename}"
 
 
-def _upsert_animals(db: Session, storage_dir: Path) -> dict[str, User]:
+def _upsert_animals(
+    db: Session, storage_dir: Path, admin_password: str
+) -> dict[str, User]:
+    """Upsert the 10 animals. Tiger gets admin role + ``admin_password``."""
     out: dict[str, User] = {}
     for a in ANIMALS:
         user = (
             db.query(User).filter(func.lower(User.name) == a.name.lower()).one_or_none()
         )
         avatar_url = _stage_avatar(a, storage_dir)
+        is_admin = a.name == ADMIN_ANIMAL
         if user is None:
-            user = User(name=a.name, avatar_url=avatar_url, role="user")
+            user = User(
+                name=a.name,
+                avatar_url=avatar_url,
+                role="admin" if is_admin else "user",
+                password_hash=hash_password(admin_password) if is_admin else None,
+            )
             db.add(user)
         else:
             user.avatar_url = avatar_url
+            if is_admin:
+                user.role = "admin"
+                user.password_hash = hash_password(admin_password)
         out[a.name] = user
     db.flush()
     return out
-
-
-def _ensure_admin(db: Session, name: str, password: str) -> User:
-    user = db.query(User).filter(func.lower(User.name) == name.lower()).one_or_none()
-    if user is None:
-        user = User(name=name, role="admin", password_hash=hash_password(password))
-        db.add(user)
-    else:
-        user.role = "admin"
-        user.password_hash = hash_password(password)
-    db.flush()
-    return user
 
 
 def _true_ratings(animals_by_name: dict[str, Animal]) -> dict[str, dict[str, float]]:
@@ -241,9 +245,8 @@ def _player_ratings(user: User) -> elo.PlayerRatings:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--admin", required=True, help="admin user name")
-    ap.add_argument("--admin-password", required=True, help="admin password")
-    ap.add_argument("--games", type=int, default=100, help="number of games to simulate")
+    ap.add_argument("--admin-password", required=True, help=f"password for {ADMIN_ANIMAL} (admin)")
+    ap.add_argument("--games", type=int, default=500, help="number of games to simulate")
     ap.add_argument("--goals-to-win", type=int, default=5)
     ap.add_argument("--seed", type=int, default=42, help="rng seed for reproducibility")
     args = ap.parse_args(argv[1:])
@@ -259,8 +262,7 @@ def main(argv: list[str]) -> int:
     Base.metadata.create_all(bind=engine)
 
     with SessionLocal() as db:
-        _ensure_admin(db, args.admin, args.admin_password)
-        users_by_name = _upsert_animals(db, storage_dir)
+        users_by_name = _upsert_animals(db, storage_dir, args.admin_password)
         db.commit()
 
         existing = db.query(Match).count()
@@ -280,7 +282,8 @@ def main(argv: list[str]) -> int:
         db.commit()
 
     print(
-        f"seeded admin {args.admin!r}, {len(ANIMALS)} animals, simulated {args.games} games"
+        f"seeded {len(ANIMALS)} animals ({ADMIN_ANIMAL} as admin), "
+        f"simulated {args.games} games"
     )
     return 0
 

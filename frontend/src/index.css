@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --c-paper: 247 243 234;
+  --c-surface: 255 255 255;
+  --c-ink: 28 28 28;
+  --c-ink2: 107 114 128;
+  --c-line: 231 224 207;
+  --c-pitch: 26 61 46;
+  --c-pitch2: 20 48 32;
+  --c-wood: 139 100 64;
+  --c-rail: 201 163 108;
+  --c-accent: 217 119 6;
+  color-scheme: light;
+}
+
+.dark {
+  --c-paper: 36 30 22;
+  --c-surface: 53 43 32;
+  --c-ink: 240 232 214;
+  --c-ink2: 184 168 146;
+  --c-line: 69 59 45;
+  --c-pitch: 52 160 101;
+  --c-pitch2: 42 124 82;
+  --c-wood: 193 150 96;
+  --c-rail: 201 163 108;
+  --c-accent: 245 158 11;
+  color-scheme: dark;
+}
+
 html, body, #root {
   height: 100%;
   overscroll-behavior: none;
@@ -17,11 +45,11 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Override Tailwind preflight's default ring color (was blue-500 / 50%). */
+/* Override Tailwind preflight's default ring color. */
 *,
 ::before,
 ::after {
-  --tw-ring-color: #e7e0cf;
+  --tw-ring-color: rgb(var(--c-line));
 }
 
 /* Kill the browser-default blue focus outline (kept only for keyboard nav). */
@@ -32,6 +60,6 @@ a:focus,
 }
 
 :focus-visible {
-  outline: 2px solid #1a3d2e;
+  outline: 2px solid rgb(var(--c-pitch));
   outline-offset: 1px;
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSettings, useUpdateSettings } from '../api/hooks';
 import type { Mode } from '../api/types';
 import Modal from '../components/Modal';
+import { useTheme } from '../theme';
 
 export default function SettingsModal({
   open,
@@ -24,6 +25,7 @@ export default function SettingsModal({
   const [local, setLocal] = useState(goalsToWin);
   const settingsQ = useSettings();
   const update = useUpdateSettings();
+  const [theme, setTheme] = useTheme();
 
   useEffect(() => setLocal(goalsToWin), [goalsToWin, open]);
 
@@ -83,6 +85,30 @@ export default function SettingsModal({
           </button>
         </div>
       </label>
+
+      <div className="mt-4">
+        <span className="mb-1 block text-sm text-ink2">Erscheinungsbild</span>
+        <div className="flex rounded-lg bg-paper p-0.5 ring-1 ring-line">
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`flex-1 rounded-md py-2 text-sm ${
+              theme === 'light' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+            }`}
+          >
+            Hell
+          </button>
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`flex-1 rounded-md py-2 text-sm ${
+              theme === 'dark' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+            }`}
+          >
+            Dunkel
+          </button>
+        </div>
+      </div>
 
       <div className="mt-5 flex gap-2">
         <button

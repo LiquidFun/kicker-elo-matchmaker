@@ -6,6 +6,17 @@
     <meta name="theme-color" content="#f7f3ea" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Kicker</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var theme = stored === 'dark' ? 'dark' : 'light';
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#241e16' : '#f7f3ea');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-paper text-ink">
     <div id="root"></div>
