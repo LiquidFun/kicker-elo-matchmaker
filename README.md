@@ -1,10 +1,24 @@
 # Kicker - try the public instance at [kicker-public.brutenis.net](https://kicker-public.brutenis.net)
 
+<table>
+  <tr>
+    <td><img src="media/match_white.png" alt="Match builder"></td>
+    <td><img src="media/stats_light.png" alt="Stats / leaderboard"></td>
+  </tr>
+</table>
+
 Foosball elo tracker used to find the fairest matching.
 
 Players have three independent ratings (attacker, defender, singles) so the guy who anchors defense isn't penalized for being dragged onto offense once. The rating update isn't pure win/loss either - a 5-4 loss against a much stronger team can still gain you points, which keeps the math honest on a small roster where the same pair would otherwise farm easy wins forever.
 
 There's also a balance helper: drop in four players and it enumerates the three possible team splits (and which side plays which position) and ranks them by how close to 50/50 the predicted win probability is.
+
+<table>
+  <tr>
+    <td><img src="media/stats_elephant_dark.png" alt="Elephant stats"></td>
+    <td><img src="media/match_history_dark.png" alt="Match history"></td>
+  </tr>
+</table>
 
 ## Stack
 
