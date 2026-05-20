@@ -6,6 +6,7 @@ import {
   PointerSensor,
   TouchSensor,
   useDndContext,
+  useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -74,6 +75,29 @@ function speakGerman(text: string): void {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'de-DE';
+
+  // iOS Safari 17+ honors this to duck/interrupt background audio.
+  // Other browsers ignore the property without throwing.
+  const audioSession = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  const prevType = audioSession?.type;
+  if (audioSession) {
+    try {
+      audioSession.type = 'transient-solo';
+    } catch {
+      // ignore
+    }
+  }
+  const restore = () => {
+    if (audioSession && prevType !== undefined) {
+      try {
+        audioSession.type = prevType;
+      } catch {
+        // ignore
+      }
+    }
+  };
+  u.onend = restore;
+  u.onerror = restore;
   window.speechSynthesis.speak(u);
 }
 
@@ -100,6 +124,11 @@ export default function MatchBuilderPage() {
   const [loserScore, setLoserScore] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionStart] = useState(() => new Date().toISOString());
+  const [armed, setArmed] = useState<SlotKey | null>(null);
+
+  function vibrate(ms: number) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
+  }
 
   const matchesQ = useMatches(undefined, 50);
   const sessionMatchCount = useMemo(
@@ -137,22 +166,62 @@ export default function MatchBuilderPage() {
   );
 
   function onDragEnd(e: DragEndEvent) {
-    const overId = e.over?.id;
-    if (!overId || typeof overId !== 'string' || !overId.startsWith('slot:')) return;
-    const targetSlot = overId.slice('slot:'.length) as SlotKey;
-    if (!slotsForMode(mode).includes(targetSlot)) return;
     const aid = String(e.active.id);
-    if (aid.startsWith('roster:')) {
+    if (!aid.startsWith('slot-drag:')) return;
+    const sourceSlot = aid.slice('slot-drag:'.length) as SlotKey;
+    const overId = e.over?.id;
+    if (overId === 'roster-drop') {
+      lastInteractionRef.current = 'tap';
+      unplace(sourceSlot);
+      return;
+    }
+    if (typeof overId === 'string' && overId.startsWith('slot:')) {
+      const targetSlot = overId.slice('slot:'.length) as SlotKey;
+      if (!slotsForMode(mode).includes(targetSlot)) return;
+      if (sourceSlot === targetSlot) return;
       lastInteractionRef.current = 'drag';
-      place(targetSlot, Number(aid.slice('roster:'.length)));
-    } else if (aid.startsWith('slot-drag:')) {
-      const sourceSlot = aid.slice('slot-drag:'.length) as SlotKey;
-      if (sourceSlot !== targetSlot) {
-        lastInteractionRef.current = 'drag';
-        swap(sourceSlot, targetSlot);
-      }
+      swap(sourceSlot, targetSlot);
     }
   }
+
+  function onSlotTap(slot: SlotKey) {
+    if (slots[slot] != null) {
+      lastInteractionRef.current = 'tap';
+      unplace(slot);
+      return;
+    }
+    if (armed === slot) {
+      setArmed(null);
+      return;
+    }
+    setArmed(slot);
+    vibrate(10);
+  }
+
+  function onRosterTap(u: User) {
+    if (armed !== null) {
+      lastInteractionRef.current = 'drag';
+      place(armed, u.id);
+      setArmed(null);
+      vibrate(15);
+      return;
+    }
+    lastInteractionRef.current = 'tap';
+    togglePlayer(u.id);
+  }
+
+  useEffect(() => {
+    if (armed === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setArmed(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [armed]);
+
+  useEffect(() => {
+    if (armed && !slotsForMode(mode).includes(armed)) setArmed(null);
+  }, [mode, armed]);
 
   function onBalance() {
     const ids = slotsForMode('doubles')
@@ -315,89 +384,83 @@ export default function MatchBuilderPage() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="mx-auto h-full max-w-5xl overflow-y-auto">
-        <div className="flex flex-col gap-3 px-3 pb-3 pt-3 md:px-6">
-          <Pitch
-            mode={mode}
-            slots={slots}
-            usersById={usersById}
-            goalsToWin={effectiveGoalsToWin}
-            loserTeam={loserTeam}
-            loserScore={loserScore}
-            lookupTeamDelta={lookupTeamDelta}
-            team1Rating={team1Rating}
-            team2Rating={team2Rating}
-            ballTeam={ballTeam}
-            isBalanced={isBalanced}
-            canBalance={
-              mode === 'doubles' && slotsForMode('doubles').every((k) => slots[k] != null)
-            }
-            isBalancing={balance.isPending}
-            onBalance={onBalance}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onSpeak={onSpeak}
-            canSpeak={complete}
-            onSlotTap={(slot) => {
-              if (slots[slot] != null) {
-                lastInteractionRef.current = 'tap';
-                unplace(slot);
-              }
-            }}
-            onPickScore={pickScore}
-            complete={complete}
-            isSet={isSet}
-            team1Score={team1Score}
-            team2Score={team2Score}
-            isCommitting={commit.isPending}
-            onCommit={commitMatch}
-          />
-
-          {commit.isError && (
-            <p className="text-sm text-red-600">{(commit.error as Error).message}</p>
-          )}
-        </div>
-
-        <button
-          onClick={() => setHistoryOpen(true)}
-          className="flex w-full items-center justify-between border-t border-line bg-paper px-3 py-3 text-left text-sm text-ink2 md:px-6"
-        >
-          <span className="flex items-center gap-2">
-            <HistoryIcon />
-            <span>Verlauf {sessionMatchCount > 0 && `• ${sessionMatchCount}`}</span>
-          </span>
-          <span aria-hidden className="text-ink2">›</span>
-        </button>
-
-        <Roster
-          users={sortedUsers}
+    <div className="mx-auto h-full max-w-5xl overflow-y-auto">
+      <div className="flex flex-col gap-3 px-3 pb-3 pt-3 md:px-6">
+        <Pitch
+          mode={mode}
           slots={slots}
-          mode={mode}
-          onTap={(u) => {
-            lastInteractionRef.current = 'tap';
-            togglePlayer(u.id);
-          }}
-        />
-
-        <Modal
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          title="Diese Sitzung"
-        >
-          <div className="-mx-1 max-h-[70vh] overflow-y-auto">
-            <SessionHistory sessionStart={sessionStart} usersById={usersById} />
-          </div>
-        </Modal>
-
-        <SettingsModal
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          isAdmin={!!isAdmin}
+          usersById={usersById}
+          armed={armed}
           goalsToWin={effectiveGoalsToWin}
-          setGoalsToWin={setGoalsToWin}
-          mode={mode}
-          setMode={setMode}
+          loserTeam={loserTeam}
+          loserScore={loserScore}
+          lookupTeamDelta={lookupTeamDelta}
+          team1Rating={team1Rating}
+          team2Rating={team2Rating}
+          ballTeam={ballTeam}
+          isBalanced={isBalanced}
+          canBalance={
+            mode === 'doubles' && slotsForMode('doubles').every((k) => slots[k] != null)
+          }
+          isBalancing={balance.isPending}
+          onBalance={onBalance}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onSpeak={onSpeak}
+          canSpeak={complete}
+          onSlotTap={onSlotTap}
+          onPickScore={pickScore}
+          complete={complete}
+          isSet={isSet}
+          team1Score={team1Score}
+          team2Score={team2Score}
+          isCommitting={commit.isPending}
+          onCommit={commitMatch}
         />
+
+        {commit.isError && (
+          <p className="text-sm text-red-600">{(commit.error as Error).message}</p>
+        )}
       </div>
+
+      <button
+        onClick={() => setHistoryOpen(true)}
+        className="flex w-full items-center justify-between border-t border-line bg-paper px-3 py-3 text-left text-sm text-ink2 md:px-6"
+      >
+        <span className="flex items-center gap-2">
+          <HistoryIcon />
+          <span>Verlauf {sessionMatchCount > 0 && `• ${sessionMatchCount}`}</span>
+        </span>
+        <span aria-hidden className="text-ink2">›</span>
+      </button>
+
+      <Roster
+        users={sortedUsers}
+        slots={slots}
+        mode={mode}
+        armed={armed}
+        onTap={onRosterTap}
+      />
+
+      <Modal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="Diese Sitzung"
+      >
+        <div className="-mx-1 max-h-[70vh] overflow-y-auto">
+          <SessionHistory sessionStart={sessionStart} usersById={usersById} />
+        </div>
+      </Modal>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        isAdmin={!!isAdmin}
+        goalsToWin={effectiveGoalsToWin}
+        setGoalsToWin={setGoalsToWin}
+        mode={mode}
+        setMode={setMode}
+      />
+    </div>
     </DndContext>
   );
 }
@@ -408,6 +471,7 @@ function Pitch({
   mode,
   slots,
   usersById,
+  armed,
   goalsToWin,
   loserTeam,
   loserScore,
@@ -434,6 +498,7 @@ function Pitch({
   mode: Mode;
   slots: Record<SlotKey, number | null>;
   usersById: Record<number, User>;
+  armed: SlotKey | null;
   goalsToWin: number;
   loserTeam: 1 | 2 | null;
   loserScore: number | null;
@@ -495,6 +560,7 @@ function Pitch({
             mode={mode}
             slots={slots}
             usersById={usersById}
+            armed={armed}
             teamRating={team1Rating}
             isWinner={loserTeam === 2}
             hasBall={ballTeam === 1}
@@ -558,6 +624,7 @@ function Pitch({
             mode={mode}
             slots={slots}
             usersById={usersById}
+            armed={armed}
             teamRating={team2Rating}
             isWinner={loserTeam === 1}
             hasBall={ballTeam === 2}
@@ -704,6 +771,7 @@ function TeamColumn({
   mode,
   slots,
   usersById,
+  armed,
   teamRating,
   isWinner,
   hasBall,
@@ -713,6 +781,7 @@ function TeamColumn({
   mode: Mode;
   slots: Record<SlotKey, number | null>;
   usersById: Record<number, User>;
+  armed: SlotKey | null;
   teamRating: number | null;
   isWinner: boolean;
   hasBall: boolean;
@@ -748,6 +817,7 @@ function TeamColumn({
             slotKey={key}
             user={slots[key] != null ? usersById[slots[key]!] ?? null : null}
             mode={mode}
+            armed={armed === key}
             onTap={() => onSlotTap(key)}
           />
         </div>
@@ -831,25 +901,48 @@ function ScoreColumn({
   );
 }
 
+const SLOT_HINT: Record<SlotKey, string> = {
+  'team1.attacker': 'Team 1 Sturm',
+  'team1.defender': 'Team 1 Abwehr',
+  'team2.attacker': 'Team 2 Sturm',
+  'team2.defender': 'Team 2 Abwehr',
+  'team1.singles': 'Team 1',
+  'team2.singles': 'Team 2',
+};
+
 function Roster({
   users,
   slots,
   mode,
+  armed,
   onTap,
 }: {
   users: User[];
   slots: Record<SlotKey, number | null>;
   mode: Mode;
+  armed: SlotKey | null;
   onTap: (u: User) => void;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'roster-drop' });
   const { active } = useDndContext();
   const dragging = active !== null;
   return (
     <div
-      className={`max-h-[40%] shrink-0 border-t border-line bg-paper px-2 py-2 md:max-h-[34%] ${
+      ref={setNodeRef}
+      className={`max-h-[40%] shrink-0 border-t bg-paper px-2 py-2 transition-colors md:max-h-[34%] ${
         dragging ? 'overflow-hidden' : 'overflow-y-auto'
-      }`}
+      } ${isOver ? 'border-accent ring-2 ring-accent' : 'border-line'}`}
     >
+      {armed && (
+        <div className="mx-auto mb-2 max-w-5xl rounded-md bg-accent/10 px-2 py-1 text-center text-[11px] font-semibold text-accent ring-1 ring-accent/40">
+          Spieler antippen → {SLOT_HINT[armed]}
+        </div>
+      )}
+      {isOver && (
+        <div className="mx-auto mb-2 max-w-5xl rounded-md bg-accent/10 px-2 py-1 text-center text-[11px] font-semibold text-accent">
+          Loslassen, um zu entfernen
+        </div>
+      )}
       <div className="mx-auto grid max-w-5xl grid-cols-4 gap-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
         {users.map((u) => (
           <RosterTile
@@ -857,6 +950,7 @@ function Roster({
             user={u}
             inLineup={findSlotOfPlayer(slots, u.id) !== null}
             mode={mode}
+            armedTarget={armed !== null}
             onTap={() => onTap(u)}
           />
         ))}
