@@ -21,6 +21,13 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function formatShortDate(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+}
+
 const MODE_TABS: { mode: LeaderboardMode; label: string }[] = [
   { mode: 'doubles', label: 'Doppel' },
   { mode: 'attacker', label: 'Sturm' },
@@ -308,6 +315,32 @@ function ProgressionChart({
     [mode, activePlayers, matches],
   );
 
+  // Stagger the avatar markers at the right edge when their final ratings are
+  // close enough to visually overlap. Walks players sorted by final rating;
+  // any chain of consecutive players within the "cluster" gap gets pushed
+  // progressively further right.
+  const xOffsetByUserId = useMemo(() => {
+    const offsets = new Map<number, number>();
+    if (data.length === 0) return offsets;
+    const last = data[data.length - 1];
+    const ends = activePlayers
+      .map((p) => ({ id: p.id, value: last[String(p.id)] as number | null }))
+      .filter((e): e is { id: number; value: number } => typeof e.value === 'number')
+      .sort((a, b) => b.value - a.value);
+    if (ends.length === 0) return offsets;
+    const range = ends[0].value - ends[ends.length - 1].value || 100;
+    const clusterGap = Math.max(15, range * 0.08);
+    const STEP = 22;
+    let i = 0;
+    while (i < ends.length) {
+      let j = i;
+      while (j + 1 < ends.length && ends[j].value - ends[j + 1].value < clusterGap) j++;
+      for (let k = i; k <= j; k++) offsets.set(ends[k].id, (k - i) * STEP);
+      i = j + 1;
+    }
+    return offsets;
+  }, [data, activePlayers]);
+
   if (activePlayers.length === 0) {
     return (
       <div className="flex h-52 items-center justify-center rounded-xl bg-surface text-sm text-ink2 ring-1 ring-line">
@@ -317,14 +350,23 @@ function ProgressionChart({
   }
 
   const lastIdx = data.length - 1;
+  const maxOffset = Math.max(0, ...xOffsetByUserId.values());
+  const rightMargin = 32 + maxOffset;
 
   return (
     <div>
       <div className="h-56 rounded-xl bg-surface p-2 ring-1 ring-line">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 28, bottom: 4, left: 0 }}>
+          <LineChart data={data} margin={{ top: 8, right: rightMargin, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={cssVar('line')} />
-            <XAxis dataKey="idx" hide />
+            <XAxis
+              dataKey="idx"
+              tick={{ fill: cssVar('ink2'), fontSize: 10 }}
+              tickFormatter={(idx) => formatShortDate(data[idx]?.created_at)}
+              minTickGap={28}
+              axisLine={{ stroke: cssVar('line') }}
+              tickLine={{ stroke: cssVar('line') }}
+            />
             <YAxis
               domain={['auto', 'auto']}
               width={40}
@@ -337,6 +379,7 @@ function ProgressionChart({
                 color: cssVar('ink'),
               }}
               labelStyle={{ color: cssVar('ink2') }}
+              labelFormatter={(idx) => formatShortDate(data[idx as number]?.created_at)}
               formatter={(value, name) => {
                 const p = activePlayers.find((p) => String(p.id) === name);
                 return [Math.round(Number(value)), p?.name ?? name];
@@ -344,6 +387,7 @@ function ProgressionChart({
             />
             {activePlayers.map((p) => {
               const color = colorByUserId.get(p.id) ?? '#888';
+              const xOffset = xOffsetByUserId.get(p.id) ?? 0;
               return (
                 <Line
                   key={p.id}
@@ -365,6 +409,7 @@ function ProgressionChart({
                         cy={cy}
                         color={color}
                         user={p}
+                        xOffset={xOffset}
                       />
                     );
                   }}
@@ -383,23 +428,47 @@ function EndAvatar({
   cy,
   color,
   user,
+  xOffset,
 }: {
   cx: number;
   cy: number;
   color: string;
   user: User;
+  xOffset: number;
 }) {
-  const r = 8;
-  const x = cx + 4;
+  const r = 10;
+  const x = cx + 6 + xOffset;
+  if (user.avatar_url) {
+    const clipId = `end-avatar-clip-${user.id}`;
+    return (
+      <g>
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx={x} cy={cy} r={r} />
+          </clipPath>
+        </defs>
+        <image
+          href={user.avatar_url}
+          x={x - r}
+          y={cy - r}
+          width={r * 2}
+          height={r * 2}
+          clipPath={`url(#${clipId})`}
+          preserveAspectRatio="xMidYMid slice"
+        />
+        <circle cx={x} cy={cy} r={r} fill="none" stroke={color} strokeWidth={1.5} />
+      </g>
+    );
+  }
   return (
     <g>
-      <circle cx={x} cy={cy} r={r + 1} fill={cssVar('surface')} stroke={color} strokeWidth={1.5} />
+      <circle cx={x} cy={cy} r={r} fill={cssVar('surface')} stroke={color} strokeWidth={1.5} />
       <text
         x={x}
         y={cy}
         textAnchor="middle"
         dy="0.34em"
-        fontSize={8}
+        fontSize={9}
         fontWeight={700}
         fill={color}
       >
@@ -409,11 +478,17 @@ function EndAvatar({
   );
 }
 
+type ProgressionPoint = {
+  idx: number;
+  created_at: string;
+  [userId: string]: number | string | null;
+};
+
 function buildProgressionSeries(
   mode: LeaderboardMode,
   activePlayers: User[],
   matches: Match[],
-) {
+): ProgressionPoint[] {
   if (activePlayers.length === 0) return [];
   if (mode === 'doubles') return buildDoublesAverageSeries(activePlayers, matches);
 
@@ -443,8 +518,9 @@ function buildProgressionSeries(
   const initial: Record<string, number | null> = {};
   for (const k of Object.keys(startingRating)) initial[k] = startingRating[k];
 
-  const data: Array<Record<string, number | null>> = [
-    { idx: 0, ...initial },
+  const firstDate = relevant[0]?.created_at ?? '';
+  const data: ProgressionPoint[] = [
+    { idx: 0, created_at: firstDate, ...initial },
   ];
   const running = { ...initial };
   let idx = 1;
@@ -454,7 +530,7 @@ function buildProgressionSeries(
       const k = String(mp.user_id);
       if (k in running) running[k] = mp.rating_after;
     }
-    data.push({ idx, ...running });
+    data.push({ idx, created_at: m.created_at, ...running });
     idx++;
   }
 
@@ -465,7 +541,7 @@ function buildProgressionSeries(
 // of doubles matches. Each match updates the player's attacker OR defender
 // rating depending on the position they played; the unchanged half carries
 // forward.
-function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]) {
+function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]): ProgressionPoint[] {
   const relevant = matches
     .filter((m) => m.mode === 'doubles')
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -491,7 +567,8 @@ function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]) {
     return out;
   };
 
-  const data: Array<Record<string, number | null>> = [{ idx: 0, ...avg() }];
+  const firstDate = relevant[0]?.created_at ?? '';
+  const data: ProgressionPoint[] = [{ idx: 0, created_at: firstDate, ...avg() }];
   let idx = 1;
   for (const m of relevant) {
     for (const mp of m.players) {
@@ -500,7 +577,7 @@ function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]) {
       if (mp.position === 'attacker') att[k] = mp.rating_after;
       else if (mp.position === 'defender') def[k] = mp.rating_after;
     }
-    data.push({ idx, ...avg() });
+    data.push({ idx, created_at: m.created_at, ...avg() });
     idx++;
   }
   return data;

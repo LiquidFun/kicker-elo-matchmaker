@@ -28,6 +28,13 @@ const POS_LABEL: Record<Position, string> = {
   singles: 'Einzel',
 };
 
+function formatShortDate(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+}
+
 export default function UserProfilePage() {
   const { userId } = useParams();
   const id = Number(userId);
@@ -113,21 +120,32 @@ export default function UserProfilePage() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
+              <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={cssVar('line')} />
-                <XAxis dataKey="idx" hide />
+                <XAxis
+                  dataKey="idx"
+                  tick={{ fill: cssVar('ink2'), fontSize: 10 }}
+                  tickFormatter={(idx) => formatShortDate(chartData[idx]?.created_at)}
+                  minTickGap={28}
+                  axisLine={{ stroke: cssVar('line') }}
+                  tickLine={{ stroke: cssVar('line') }}
+                />
                 <YAxis
                   domain={['auto', 'auto']}
                   width={36}
                   tick={{ fill: cssVar('ink2'), fontSize: 11 }}
                 />
                 <Tooltip
+                  cursor={false}
+                  trigger="click"
                   contentStyle={{
                     background: cssVar('surface'),
                     border: `1px solid ${cssVar('line')}`,
                     color: cssVar('ink'),
                   }}
                   labelStyle={{ color: cssVar('ink2') }}
+                  labelFormatter={(idx) => formatShortDate(chartData[idx as number]?.created_at)}
+                  formatter={(value, name) => [Number(value).toFixed(1), name]}
                 />
                 <Line
                   type="monotone"
@@ -287,6 +305,7 @@ function useMergedHistory(history?: {
 
     const result: Array<{
       idx: number;
+      created_at: string;
       attacker: number | null;
       defender: number | null;
       singles: number | null;
@@ -298,7 +317,13 @@ function useMergedHistory(history?: {
       if (p.position === 'attacker') aLast = p.rating_after;
       else if (p.position === 'defender') dLast = p.rating_after;
       else sLast = p.rating_after;
-      result.push({ idx, attacker: aLast, defender: dLast, singles: sLast });
+      result.push({
+        idx,
+        created_at: p.created_at,
+        attacker: aLast,
+        defender: dLast,
+        singles: sLast,
+      });
     });
     return result;
   }, [history]);
