@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -10,8 +10,9 @@ import {
   YAxis,
 } from 'recharts';
 
-import { useMatches, useUserStats, useUsers } from '../api/hooks';
+import { useLogout, useMatches, useMe, useUserStats, useUsers } from '../api/hooks';
 import type { Position, User } from '../api/types';
+import EditUserDialog from '../admin/EditUserDialog';
 import Avatar from '../match/Avatar';
 import { cssVar, useTheme } from '../theme';
 
@@ -33,8 +34,12 @@ export default function UserProfilePage() {
   const stats = useUserStats(id);
   const usersQ = useUsers();
   const matchesQ = useMatches({ userId: id, limit: 10 });
+  const me = useMe();
+  const logout = useLogout();
+  const [editOpen, setEditOpen] = useState(false);
   useTheme(); // re-render on theme change so chart colors refresh
   const POS_COLOR = posColors();
+  const isMe = me.data?.id === id;
 
   const usersById = useMemo(() => {
     const m: Record<number, User> = {};
@@ -63,7 +68,35 @@ export default function UserProfilePage() {
         <div className="min-w-0 flex-1">
           <div className="truncate text-lg font-semibold">{user.name}</div>
         </div>
+        {isMe && (
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="rounded-lg bg-surface px-3 py-1.5 text-sm text-ink ring-1 ring-line"
+            >
+              Profil bearbeiten
+            </button>
+            <button
+              type="button"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+              className="rounded-lg bg-surface px-3 py-1.5 text-sm text-ink2 ring-1 ring-line disabled:opacity-50"
+            >
+              Abmelden
+            </button>
+          </div>
+        )}
       </div>
+
+      {isMe && me.data && (
+        <EditUserDialog
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          user={me.data}
+          isAdmin={me.data.role === 'admin'}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-2 p-3 text-center">
         <RatingCard label="Sturm" rating={user.rating_attacker} totals={totals.attacker} />
