@@ -62,14 +62,14 @@ echo "Backend  → http://0.0.0.0:8000  (log: $LOGS/backend.log)"
 firejail "${FJ_OPTS[@]}" -- \
   env PATH="$SANDBOX_PATH" \
   bash -c "cd '$ROOT/backend' && '$UV_BIN' run uvicorn kicker.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir src" \
-  >"$LOGS/backend.log" 2>&1 &
+  > >(tee "$LOGS/backend.log") 2>&1 &
 PIDS+=($!)
 
 echo "Frontend → http://0.0.0.0:5173  (log: $LOGS/frontend.log)"
 firejail "${FJ_OPTS[@]}" -- \
   env PATH="$SANDBOX_PATH" \
   bash -c "cd '$ROOT/frontend' && '$NPX_BIN' vite --port 5173 --host 0.0.0.0" \
-  >"$LOGS/frontend.log" 2>&1 &
+  > >(tee "$LOGS/frontend.log") 2>&1 &
 PIDS+=($!)
 
 echo

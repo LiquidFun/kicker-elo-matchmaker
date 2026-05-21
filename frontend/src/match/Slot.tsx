@@ -1,4 +1,4 @@
-import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
 import type { Mode, User } from '../api/types';
@@ -40,6 +40,16 @@ export default function Slot({
     disabled: !user,
   });
 
+  const { active } = useDndContext();
+  const activeId = active ? String(active.id) : null;
+  const dragSourceSlot: SlotKey | null = activeId?.startsWith('slot-drag:')
+    ? (activeId.slice('slot-drag:'.length) as SlotKey)
+    : null;
+  const dragFromRoster = activeId?.startsWith('roster:') ?? false;
+  const isSelf = dragSourceSlot === slotKey;
+  const isDropTarget = (dragFromRoster || dragSourceSlot !== null) && !isSelf;
+  const showSwap = dragSourceSlot !== null && !isSelf;
+
   const setRefs = (el: HTMLButtonElement | null) => {
     setDropRef(el);
     drag.setNodeRef(el);
@@ -49,15 +59,17 @@ export default function Slot({
     ? { transform: CSS.Translate.toString(drag.transform), zIndex: 50 }
     : undefined;
 
-  const active = activePosition(slotKey);
+  const active_ = activePosition(slotKey);
 
   const containerClasses = isOver
     ? 'border-pitch bg-paper/80 ring-2 ring-pitch'
-    : armed
-      ? 'border-accent bg-paper/80 ring-2 ring-accent animate-pulse'
-      : user
-        ? 'border-line bg-surface/80 shadow-sm'
-        : 'border-dashed border-line bg-surface/60';
+    : isDropTarget
+      ? 'border-accent bg-paper/80 ring-2 ring-accent'
+      : armed
+        ? 'border-accent bg-paper/80 ring-2 ring-accent animate-pulse'
+        : user
+          ? 'border-line bg-surface/80 shadow-sm'
+          : 'border-dashed border-line bg-surface/60';
 
   return (
     <button
@@ -67,7 +79,7 @@ export default function Slot({
       style={dragStyle}
       {...drag.listeners}
       {...drag.attributes}
-      className={`flex w-full flex-col items-center gap-1 rounded-2xl border p-2 text-ink backdrop-blur-md transition-colors ${containerClasses} ${user ? 'cursor-grab active:cursor-grabbing touch-none' : ''}`}
+      className={`relative flex w-full flex-col items-center gap-1 rounded-2xl border p-2 text-ink backdrop-blur-md transition-colors ${containerClasses} ${user ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
     >
       <div className="text-[10px] font-semibold uppercase tracking-wider text-pitch">
         {POSITION_LABEL[slotKey]}
@@ -83,12 +95,12 @@ export default function Slot({
               <RatingPair
                 label="S"
                 value={user.rating_attacker}
-                active={active === 'attacker'}
+                active={active_ === 'attacker'}
               />
               <RatingPair
                 label="A"
                 value={user.rating_defender}
-                active={active === 'defender'}
+                active={active_ === 'defender'}
               />
             </div>
           ) : (
@@ -101,6 +113,11 @@ export default function Slot({
         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-paper text-2xl text-pitch ring-1 ring-line">
           +
         </div>
+      )}
+      {showSwap && (
+        <span className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 rounded-md bg-accent px-2 py-0.5 text-center text-xs font-bold uppercase tracking-wider text-white shadow">
+          Swap
+        </span>
       )}
     </button>
   );

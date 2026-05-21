@@ -161,26 +161,39 @@ export default function MatchBuilderPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 60, tolerance: 20 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   );
 
   function onDragEnd(e: DragEndEvent) {
     const aid = String(e.active.id);
-    if (!aid.startsWith('slot-drag:')) return;
-    const sourceSlot = aid.slice('slot-drag:'.length) as SlotKey;
     const overId = e.over?.id;
-    if (overId === 'roster-drop') {
-      lastInteractionRef.current = 'tap';
-      unplace(sourceSlot);
+
+    if (aid.startsWith('roster:')) {
+      const userId = Number(aid.slice('roster:'.length));
+      if (typeof overId === 'string' && overId.startsWith('slot:')) {
+        const targetSlot = overId.slice('slot:'.length) as SlotKey;
+        if (!slotsForMode(mode).includes(targetSlot)) return;
+        lastInteractionRef.current = 'drag';
+        place(targetSlot, userId);
+      }
       return;
     }
-    if (typeof overId === 'string' && overId.startsWith('slot:')) {
-      const targetSlot = overId.slice('slot:'.length) as SlotKey;
-      if (!slotsForMode(mode).includes(targetSlot)) return;
-      if (sourceSlot === targetSlot) return;
-      lastInteractionRef.current = 'drag';
-      swap(sourceSlot, targetSlot);
+
+    if (aid.startsWith('slot-drag:')) {
+      const sourceSlot = aid.slice('slot-drag:'.length) as SlotKey;
+      if (overId === 'roster-drop') {
+        lastInteractionRef.current = 'tap';
+        unplace(sourceSlot);
+        return;
+      }
+      if (typeof overId === 'string' && overId.startsWith('slot:')) {
+        const targetSlot = overId.slice('slot:'.length) as SlotKey;
+        if (!slotsForMode(mode).includes(targetSlot)) return;
+        if (sourceSlot === targetSlot) return;
+        lastInteractionRef.current = 'drag';
+        swap(sourceSlot, targetSlot);
+      }
     }
   }
 
@@ -383,7 +396,7 @@ export default function MatchBuilderPage() {
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} onDragEnd={onDragEnd} autoScroll={false}>
     <div className="mx-auto h-full max-w-5xl overflow-y-auto">
       <div className="flex flex-col gap-3 px-3 pb-3 pt-3 md:px-6">
         <Pitch
@@ -436,7 +449,6 @@ export default function MatchBuilderPage() {
       <Roster
         users={sortedUsers}
         slots={slots}
-        mode={mode}
         armed={armed}
         onTap={onRosterTap}
       />
@@ -533,7 +545,7 @@ function Pitch({
       : 'bg-accent text-white ring-accent';
 
   return (
-    <div className="relative min-h-[340px] flex-shrink-0 overflow-hidden text-ink md:min-h-[420px]">
+    <div className="relative min-h-[340px] flex-shrink-0 text-ink md:min-h-[420px]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 dark:[filter:invert(1)_hue-rotate(180deg)]"
@@ -910,51 +922,105 @@ const SLOT_HINT: Record<SlotKey, string> = {
   'team2.singles': 'Team 2',
 };
 
+// Match the responsive grid below: cols at each Tailwind breakpoint.
+function useRosterPageSize(): number {
+  const [size, setSize] = useState(12);
+  useEffect(() => {
+    const update = () => {
+      if (window.matchMedia('(min-width: 1024px)').matches) setSize(40);
+      else if (window.matchMedia('(min-width: 768px)').matches) setSize(32);
+      else if (window.matchMedia('(min-width: 640px)').matches) setSize(24);
+      else setSize(12);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return size;
+}
+
 function Roster({
   users,
   slots,
-  mode,
   armed,
   onTap,
 }: {
   users: User[];
   slots: Record<SlotKey, number | null>;
-  mode: Mode;
   armed: SlotKey | null;
   onTap: (u: User) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'roster-drop' });
   const { active } = useDndContext();
-  const dragging = active !== null;
+  const draggingFromSlot = active ? String(active.id).startsWith('slot-drag:') : false;
+
+  const pageSize = useRosterPageSize();
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * pageSize;
+  const visible = users.slice(start, start + pageSize);
+
   return (
     <div
       ref={setNodeRef}
-      className={`max-h-[40%] shrink-0 border-t bg-paper px-2 py-2 transition-colors md:max-h-[34%] ${
-        dragging ? 'overflow-hidden' : 'overflow-y-auto'
-      } ${isOver ? 'border-accent ring-2 ring-accent' : 'border-line'}`}
+      className="relative shrink-0 border-t border-line bg-paper px-2 py-2"
     >
       {armed && (
         <div className="mx-auto mb-2 max-w-5xl rounded-md bg-accent/10 px-2 py-1 text-center text-[11px] font-semibold text-accent ring-1 ring-accent/40">
           Spieler antippen → {SLOT_HINT[armed]}
         </div>
       )}
-      {isOver && (
-        <div className="mx-auto mb-2 max-w-5xl rounded-md bg-accent/10 px-2 py-1 text-center text-[11px] font-semibold text-accent">
-          Loslassen, um zu entfernen
-        </div>
-      )}
+
       <div className="mx-auto grid max-w-5xl grid-cols-4 gap-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-        {users.map((u) => (
+        {visible.map((u) => (
           <RosterTile
             key={u.id}
             user={u}
             inLineup={findSlotOfPlayer(slots, u.id) !== null}
-            mode={mode}
             armedTarget={armed !== null}
             onTap={() => onTap(u)}
           />
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-2 flex items-center justify-center gap-3 text-xs text-ink2">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(0, safePage - 1))}
+            disabled={safePage === 0}
+            className="rounded px-2 py-1 ring-1 ring-line disabled:opacity-40"
+            aria-label="Vorherige Seite"
+          >
+            ‹
+          </button>
+          <span className="tabular-nums">
+            {safePage + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+            disabled={safePage === totalPages - 1}
+            className="rounded px-2 py-1 ring-1 ring-line disabled:opacity-40"
+            aria-label="Nächste Seite"
+          >
+            ›
+          </button>
+        </div>
+      )}
+
+      {draggingFromSlot && (
+        <div
+          className={`pointer-events-none absolute inset-0 z-20 flex items-center justify-center transition-colors ${
+            isOver ? 'bg-accent/30 ring-2 ring-inset ring-accent' : 'bg-accent/15 ring-2 ring-inset ring-accent/50'
+          }`}
+        >
+          <div className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow">
+            Loslassen, um zu entfernen
+          </div>
+        </div>
+      )}
     </div>
   );
 }
