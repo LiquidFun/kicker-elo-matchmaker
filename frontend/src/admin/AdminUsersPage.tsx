@@ -96,19 +96,26 @@ function UserRow({
   const isSelf = me.data?.id === user.id;
   const canEdit = isAdmin || isSelf;
 
-  function onDelete() {
+  function onDelete(e: React.MouseEvent) {
+    e.stopPropagation();
     if (!confirm(`${user.name} löschen? Vergangene Spiele bleiben erhalten.`)) return;
     del.mutate(user.id);
   }
 
-  function onResetLink() {
+  function onResetLink(e: React.MouseEvent) {
+    e.stopPropagation();
     link.mutate(user.id, {
       onSuccess: (data) => onLink(data.password_set_url),
     });
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-line bg-surface px-3 py-3">
+    <div
+      className={`flex items-center gap-3 border-b border-line bg-surface px-3 py-3 ${
+        canEdit ? 'cursor-pointer' : ''
+      }`}
+      onClick={canEdit ? onEdit : undefined}
+    >
       <Avatar user={user} size="md" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">
@@ -127,7 +134,10 @@ function UserRow({
       </div>
       {canEdit && (
         <button
-          onClick={onEdit}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
           className="rounded-md bg-paper p-1.5 text-ink ring-1 ring-line"
           aria-label="Bearbeiten"
           title="Bearbeiten"
