@@ -130,9 +130,9 @@ export default function MatchBuilderPage() {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
   }
 
-  const matchesQ = useMatches(undefined, 50);
+  const matchesQ = useMatches({ limit: 50 });
   const sessionMatchCount = useMemo(
-    () => (matchesQ.data ?? []).filter((m) => m.created_at >= sessionStart).length,
+    () => (matchesQ.data?.items ?? []).filter((m) => m.created_at >= sessionStart).length,
     [matchesQ.data, sessionStart],
   );
 
@@ -142,7 +142,7 @@ export default function MatchBuilderPage() {
   const initialLastPlayedRef = useRef<Map<number, string> | null>(null);
   if (initialLastPlayedRef.current === null && matchesQ.data) {
     const m = new Map<number, string>();
-    for (const match of matchesQ.data) {
+    for (const match of matchesQ.data.items) {
       for (const p of match.players) {
         const prev = m.get(p.user_id);
         if (!prev || match.created_at > prev) m.set(p.user_id, match.created_at);

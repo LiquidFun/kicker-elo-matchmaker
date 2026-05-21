@@ -59,7 +59,7 @@ const LINE_COLORS_DARK = [
 
 export default function StatsPage() {
   const usersQ = useUsers();
-  const matchesQ = useMatches(undefined, 200);
+  const matchesQ = useMatches({ limit: 200 });
   const globalQ = useGlobalStats();
   const [chartMode, setChartMode] = useState<LeaderboardMode>('doubles');
   const [theme] = useTheme();
@@ -93,9 +93,9 @@ export default function StatsPage() {
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
       {globalQ.data && (
         <div className="grid shrink-0 grid-cols-3 gap-2 px-3 py-3 text-center text-xs">
-          <Stat label="Spiele" value={globalQ.data.total_matches} />
-          <Stat label="Doppel" value={globalQ.data.doubles_matches} />
-          <Stat label="Einzel" value={globalQ.data.singles_matches} />
+          <Stat label="Spiele" value={globalQ.data.total_matches} to="/stats/games" />
+          <Stat label="Doppel" value={globalQ.data.doubles_matches} to="/stats/games?mode=doubles" />
+          <Stat label="Einzel" value={globalQ.data.singles_matches} to="/stats/games?mode=singles" />
         </div>
       )}
 
@@ -111,7 +111,7 @@ export default function StatsPage() {
         <ProgressionChart
           mode={chartMode}
           activePlayers={activeInMode}
-          matches={matchesQ.data ?? []}
+          matches={matchesQ.data?.items ?? []}
           colorByUserId={colorByUserId}
         />
       </div>
@@ -119,12 +119,15 @@ export default function StatsPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, to }: { label: string; value: number; to: string }) {
   return (
-    <div className="rounded-lg bg-surface px-2 py-2 ring-1 ring-line">
+    <Link
+      to={to}
+      className="rounded-lg bg-surface px-2 py-2 ring-1 ring-line active:bg-paper"
+    >
       <div className="text-lg font-semibold tabular-nums">{value}</div>
       <div className="text-[10px] uppercase tracking-wider text-ink2">{label}</div>
-    </div>
+    </Link>
   );
 }
 

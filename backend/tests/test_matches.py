@@ -219,7 +219,7 @@ def test_only_latest_match_deletable(admin_client, four_players):
                 ],
             },
         )
-    matches = admin_client.get("/api/matches").json()
+    matches = admin_client.get("/api/matches").json()["items"]
     oldest = matches[-1]["id"]
     r = admin_client.delete(f"/api/matches/{oldest}")
     assert r.status_code == 400
@@ -244,3 +244,85 @@ def test_non_admin_cannot_change_settings(client, admin_client):
     admin_client.post("/api/auth/login", json={"name": "Regular", "password": "regpw12345"})
     r = admin_client.put("/api/settings", json={"default_goals_to_win": 9})
     assert r.status_code == 403
+
+
+def _doubles(client, players, t1=5, t2=0):
+    a, b, c, d = players
+    return client.post(
+        "/api/matches",
+        json={
+            "mode": "doubles",
+            "goals_to_win": 5,
+            "team1_score": t1,
+            "team2_score": t2,
+            "players": [
+                {"user_id": a, "team": 1, "position": "attacker"},
+                {"user_id": b, "team": 1, "position": "defender"},
+                {"user_id": c, "team": 2, "position": "attacker"},
+                {"user_id": d, "team": 2, "position": "defender"},
+            ],
+        },
+    )
+
+
+def _singles(client, players, t1=5, t2=0):
+    e, f = players
+    return client.post(
+        "/api/matches",
+        json={
+            "mode": "singles",
+            "goals_to_win": 5,
+            "team1_score": t1,
+            "team2_score": t2,
+            "players": [
+                {"user_id": e, "team": 1, "position": "singles"},
+                {"user_id": f, "team": 2, "position": "singles"},
+            ],
+        },
+    )
+
+
+def test_list_matches_returns_items_and_total(admin_client, four_players, two_players):
+    _doubles(admin_client, four_players)
+    _doubles(admin_client, four_players)
+    _singles(admin_client, two_players)
+    body = admin_client.get("/api/matches").json()
+    assert body["total"] == 3
+    assert len(body["items"]) == 3
+    # Newest first
+    assert body["items"][0]["mode"] == "singles"
+
+
+def test_list_matches_mode_filter(admin_client, four_players, two_players):
+    _doubles(admin_client, four_players)
+    _singles(admin_client, two_players)
+    _doubles(admin_client, four_players)
+    doubles = admin_client.get("/api/matches?mode=doubles").json()
+    singles = admin_client.get("/api/matches?mode=singles").json()
+    assert doubles["total"] == 2 and all(m["mode"] == "doubles" for m in doubles["items"])
+    assert singles["total"] == 1 and all(m["mode"] == "singles" for m in singles["items"])
+
+
+def test_list_matches_offset_paginates(admin_client, four_players):
+    for _ in range(5):
+        _doubles(admin_client, four_players)
+    first = admin_client.get("/api/matches?limit=2&offset=0").json()
+    second = admin_client.get("/api/matches?limit=2&offset=2").json()
+    assert first["total"] == 5 and second["total"] == 5
+    assert len(first["items"]) == 2 and len(second["items"]) == 2
+    first_ids = {m["id"] for m in first["items"]}
+    second_ids = {m["id"] for m in second["items"]}
+    assert first_ids.isdisjoint(second_ids)
+
+
+def test_non_admin_cannot_exceed_limit_cap(client, admin_client):
+    admin_client.post("/api/users", json={"name": "Regular", "password": "regpw12345"})
+    admin_client.post("/api/auth/logout")
+    admin_client.post("/api/auth/login", json={"name": "Regular", "password": "regpw12345"})
+    assert admin_client.get("/api/matches?limit=500").status_code == 200
+    assert admin_client.get("/api/matches?limit=501").status_code == 403
+
+
+def test_admin_can_exceed_limit_cap(admin_client):
+    r = admin_client.get("/api/matches?limit=10000")
+    assert r.status_code == 200

@@ -6,6 +6,7 @@ import type {
   GlobalStats,
   LeaderboardMode,
   Match,
+  MatchList,
   MatchPlayerInput,
   Mode,
   PreviewResult,
@@ -151,15 +152,21 @@ export const usePasswordTokenLookup = (token: string | null) =>
     retry: false,
   });
 
-export const useMatches = (userId?: number, limit = 50) =>
-  useQuery({
-    queryKey: ['matches', { userId, limit }],
+export const useMatches = (
+  opts: { userId?: number; mode?: Mode; limit?: number; offset?: number } = {},
+) => {
+  const { userId, mode, limit = 50, offset = 0 } = opts;
+  return useQuery({
+    queryKey: ['matches', { userId, mode, limit, offset }],
     queryFn: () => {
-      const qs = new URLSearchParams({ limit: String(limit) });
+      const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (userId) qs.set('user_id', String(userId));
-      return api.get<Match[]>(`/api/matches?${qs.toString()}`);
+      if (mode) qs.set('mode', mode);
+      return api.get<MatchList>(`/api/matches?${qs.toString()}`);
     },
+    placeholderData: (prev) => prev,
   });
+};
 
 export const useCreateMatch = () => {
   const qc = useQueryClient();

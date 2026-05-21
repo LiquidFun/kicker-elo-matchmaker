@@ -43,6 +43,11 @@ export interface Match {
   players: MatchPlayer[];
 }
 
+export interface MatchList {
+  items: Match[];
+  total: number;
+}
+
 export interface MatchPlayerInput {
   user_id: number;
   team: 1 | 2;

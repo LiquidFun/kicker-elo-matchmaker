@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import auth, elo, models, schemas
 from ..db import get_db
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
+
+NON_ADMIN_LIMIT_MAX = 500
 
 
 def _load_players_or_404(db: Session, ids: list[int]) -> dict[int, models.User]:
@@ -150,17 +152,48 @@ def create_match(
 
 @router.get("")
 def list_matches(
-    _: models.User | None = Depends(auth.public_or_user),
+    actor: models.User | None = Depends(auth.public_or_user),
     db: Session = Depends(get_db),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1),
+    offset: int = Query(0, ge=0),
+    mode: schemas.Mode | None = None,
     user_id: int | None = None,
-) -> list[schemas.MatchOut]:
-    stmt = select(models.Match).options(selectinload(models.Match.players))
+) -> schemas.MatchListOut:
+    is_admin = actor is not None and actor.role == "admin"
+    if not is_admin and limit > NON_ADMIN_LIMIT_MAX:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"limit must be <= {NON_ADMIN_LIMIT_MAX} for non-admins",
+        )
+
+    filters = []
+    if mode is not None:
+        filters.append(models.Match.mode == mode)
+
+    count_stmt = select(func.count()).select_from(models.Match)
+    items_stmt = select(models.Match).options(selectinload(models.Match.players))
     if user_id is not None:
-        stmt = stmt.join(models.MatchPlayer).where(models.MatchPlayer.user_id == user_id)
-    stmt = stmt.order_by(models.Match.created_at.desc()).limit(limit)
-    rows = db.scalars(stmt).unique().all()
-    return [schemas.MatchOut.model_validate(m) for m in rows]
+        count_stmt = count_stmt.join(models.MatchPlayer).where(
+            models.MatchPlayer.user_id == user_id
+        )
+        items_stmt = items_stmt.join(models.MatchPlayer).where(
+            models.MatchPlayer.user_id == user_id
+        )
+    for f in filters:
+        count_stmt = count_stmt.where(f)
+        items_stmt = items_stmt.where(f)
+
+    total = db.scalar(count_stmt) or 0
+    items_stmt = (
+        items_stmt.order_by(models.Match.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = db.scalars(items_stmt).unique().all()
+    return schemas.MatchListOut(
+        items=[schemas.MatchOut.model_validate(m) for m in rows],
+        total=total,
+    )
 
 
 @router.get("/{match_id}")

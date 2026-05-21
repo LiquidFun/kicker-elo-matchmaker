@@ -13,10 +13,10 @@ export default function SessionHistory({
   sessionStart: string;
   usersById: Record<number, User>;
 }) {
-  const matchesQ = useMatches(undefined, 50);
+  const matchesQ = useMatches({ limit: 50 });
 
   const sessionMatches = useMemo(
-    () => (matchesQ.data ?? []).filter((m) => m.created_at >= sessionStart),
+    () => (matchesQ.data?.items ?? []).filter((m) => m.created_at >= sessionStart),
     [matchesQ.data, sessionStart],
   );
 

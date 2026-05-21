@@ -138,6 +138,11 @@ class MatchOut(BaseModel):
     players: list[MatchPlayerOut]
 
 
+class MatchListOut(BaseModel):
+    items: list[MatchOut]
+    total: int
+
+
 class BalanceIn(BaseModel):
     player_ids: list[int] = Field(min_length=4, max_length=4)
 

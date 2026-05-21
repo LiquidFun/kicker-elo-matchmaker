@@ -32,7 +32,7 @@ export default function UserProfilePage() {
   const id = Number(userId);
   const stats = useUserStats(id);
   const usersQ = useUsers();
-  const matchesQ = useMatches(id, 10);
+  const matchesQ = useMatches({ userId: id, limit: 10 });
   useTheme(); // re-render on theme change so chart colors refresh
   const POS_COLOR = posColors();
 
@@ -138,7 +138,7 @@ export default function UserProfilePage() {
       <div className="px-3 pb-4">
         <div className="mb-2 text-xs uppercase tracking-wider text-ink2">Letzte Spiele</div>
         <div className="space-y-1">
-          {matchesQ.data?.map((m) => {
+          {matchesQ.data?.items.map((m) => {
             const me = m.players.find((p) => p.user_id === id);
             if (!me) return null;
             const won = m.winner_team === me.team;
@@ -165,7 +165,7 @@ export default function UserProfilePage() {
               </div>
             );
           })}
-          {(matchesQ.data?.length ?? 0) === 0 && (
+          {(matchesQ.data?.items.length ?? 0) === 0 && (
             <div className="text-center text-sm text-ink2">Noch keine Spiele</div>
           )}
         </div>

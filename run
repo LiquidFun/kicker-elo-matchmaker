@@ -18,9 +18,12 @@ NODE_BIN="$(command -v node || true)"
 if [[ -z "$UV_BIN" ]]; then echo "uv not found on PATH" >&2; exit 1; fi
 if [[ -z "$NPX_BIN" ]]; then echo "npx not found on PATH" >&2; exit 1; fi
 
-# Minimal sandbox: drop privileges, no new privs, blank /tmp & /dev, restrict
-# home view to the project dir. We don't isolate the network because the dev
-# servers must be reachable on the host.
+# Sandbox: drop privileges, blank /tmp & /dev, expose only the project dir
+# (so $HOME, /etc secrets, etc. are hidden), and mount everything read-only
+# except: the SQLite database files, the avatars upload dir, and the
+# frontend/ subtree (vite writes a bundled config to `vite.config.ts.timestamp-*.mjs`
+# next to its config and caches deps in node_modules/.vite). Network is not
+# isolated because the dev servers must be reachable on the host.
 FJ_OPTS=(
   --quiet
   --noprofile
@@ -33,6 +36,12 @@ FJ_OPTS=(
   --whitelist="$HOME/.local"
   --whitelist="$HOME/.cache"
   --whitelist="$HOME/.npm"
+  --read-only="$ROOT"
+  --read-write="$ROOT/backend/kicker.db"
+  --read-write="$ROOT/backend/kicker.db-shm"
+  --read-write="$ROOT/backend/kicker.db-wal"
+  --read-write="$ROOT/backend/storage/avatars"
+  --read-write="$ROOT/frontend"
 )
 
 PIDS=()

@@ -5,6 +5,7 @@ import LoginPage from './auth/LoginPage';
 import SetPasswordPage from './auth/SetPasswordPage';
 import AppLayout from './layout/AppLayout';
 import MatchBuilderPage from './match/MatchBuilderPage';
+import GamesListPage from './stats/GamesListPage';
 import StatsPage from './stats/StatsPage';
 import UserProfilePage from './stats/UserProfilePage';
 import AdminUsersPage from './admin/AdminUsersPage';
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/" element={<AppLayout user={user} />}>
         <Route index element={<MatchBuilderPage />} />
         <Route path="stats" element={<StatsPage />} />
+        <Route path="stats/games" element={<GamesListPage />} />
         <Route path="stats/users/:userId" element={<UserProfilePage />} />
         <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
