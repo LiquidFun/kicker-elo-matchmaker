@@ -1,77 +1,125 @@
 #!/usr/bin/env bash
-# Start backend (uvicorn) and frontend (vite) dev servers, each in firejail.
-# Logs are written to ./logs/. Ctrl+C stops both.
+# Dev helper: run sandboxed dev servers or seed the database.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOGS="$ROOT/logs"
-mkdir -p "$LOGS"
 
-if ! command -v firejail >/dev/null 2>&1; then
-  echo "firejail not found. Install: sudo apt install firejail" >&2
-  exit 1
-fi
+usage() {
+  cat <<EOF
+Usage: ./run [command]
+
+Commands:
+  dev            Start backend + frontend dev servers (default)
+  init-test-db   Seed the database with demo animals + simulated games
+
+Options:
+  -h, --help     Show this help
+EOF
+}
+
+# ── Dependency checks ────────────────────────────────────────────────
+require_firejail() {
+  if ! command -v firejail >/dev/null 2>&1; then
+    echo "firejail not found. Install: sudo apt install firejail" >&2
+    exit 1
+  fi
+}
 
 UV_BIN="$(command -v uv || true)"
+NPM_BIN="$(command -v npm || true)"
 NPX_BIN="$(command -v npx || true)"
-NODE_BIN="$(command -v node || true)"
-if [[ -z "$UV_BIN" ]]; then echo "uv not found on PATH" >&2; exit 1; fi
-if [[ -z "$NPX_BIN" ]]; then echo "npx not found on PATH" >&2; exit 1; fi
 
-# Sandbox: drop privileges, blank /tmp & /dev, expose only the project dir
+# ── Firejail sandbox config ──────────────────────────────────────────
+# Drop privileges, blank /tmp & /dev, expose only the project dir
 # (so $HOME, /etc secrets, etc. are hidden), and mount everything read-only
-# except: the SQLite database files, the avatars upload dir, and the
-# frontend/ subtree (vite writes a bundled config to `vite.config.ts.timestamp-*.mjs`
-# next to its config and caches deps in node_modules/.vite). Network is not
-# isolated because the dev servers must be reachable on the host.
-FJ_OPTS=(
-  --quiet
-  --noprofile
-  --caps.drop=all
-  --nonewprivs
-  --nogroups
-  --private-tmp
-  --private-dev
-  --whitelist="$ROOT"
-  --whitelist="$HOME/.local"
-  --whitelist="$HOME/.cache"
-  --whitelist="$HOME/.npm"
-  --read-only="$ROOT"
-  --read-write="$ROOT/backend/kicker.db"
-  --read-write="$ROOT/backend/kicker.db-shm"
-  --read-write="$ROOT/backend/kicker.db-wal"
-  --read-write="$ROOT/backend/storage/avatars"
-  --read-write="$ROOT/frontend"
-)
-
-PIDS=()
-
-cleanup() {
-  echo
-  echo "Stopping…"
-  for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
-  done
-  wait 2>/dev/null || true
+# except: the storage dir (SQLite + avatars), the backend venv, and the
+# frontend/ subtree (vite writes temp files next to its config and caches
+# deps in node_modules/.vite). Network is not isolated because the dev
+# servers must be reachable on the host.
+setup_sandbox() {
+  SANDBOX_PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  FJ_OPTS=(
+    --quiet
+    --noprofile
+    --caps.drop=all
+    --nonewprivs
+    --nogroups
+    --private-tmp
+    --private-dev
+    --seccomp
+    --whitelist="$ROOT"
+    --whitelist="$HOME/.local"
+    --whitelist="$HOME/.cache"
+    --whitelist="$HOME/.npm"
+    --read-only="$ROOT"
+    --read-write="$ROOT/backend/.venv"
+    --read-write="$ROOT/backend/storage"
+    --read-write="$ROOT/frontend"
+  )
+  mkdir -p "$ROOT/backend/.venv" "$ROOT/backend/storage/avatars"
 }
-trap cleanup EXIT INT TERM
 
-SANDBOX_PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# ── Commands ─────────────────────────────────────────────────────────
+cmd_dev() {
+  require_firejail
+  setup_sandbox
+  if [[ -z "$UV_BIN" ]]; then echo "uv not found on PATH" >&2; exit 1; fi
+  if [[ -z "$NPM_BIN" ]]; then echo "npm not found on PATH" >&2; exit 1; fi
+  if [[ -z "$NPX_BIN" ]]; then echo "npx not found on PATH" >&2; exit 1; fi
 
-echo "Backend  → http://0.0.0.0:8000  (log: $LOGS/backend.log)"
-firejail "${FJ_OPTS[@]}" -- \
-  env PATH="$SANDBOX_PATH" \
-  bash -c "cd '$ROOT/backend' && '$UV_BIN' run uvicorn kicker.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir src" \
-  > >(tee "$LOGS/backend.log") 2>&1 &
-PIDS+=($!)
+  mkdir -p "$LOGS"
 
-echo "Frontend → http://0.0.0.0:5173  (log: $LOGS/frontend.log)"
-firejail "${FJ_OPTS[@]}" -- \
-  env PATH="$SANDBOX_PATH" \
-  bash -c "cd '$ROOT/frontend' && '$NPX_BIN' vite --port 5173 --host 0.0.0.0" \
-  > >(tee "$LOGS/frontend.log") 2>&1 &
-PIDS+=($!)
+  PIDS=()
+  cleanup() {
+    echo
+    echo "Stopping…"
+    for pid in "${PIDS[@]}"; do
+      kill "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+  }
+  trap cleanup EXIT INT TERM
 
-echo
-echo "Ctrl+C to stop both."
-wait
+  echo "Installing frontend dependencies (sandboxed)…"
+  firejail "${FJ_OPTS[@]}" -- \
+    env PATH="$SANDBOX_PATH" \
+    bash -c "cd '$ROOT/frontend' && '$NPM_BIN' install"
+
+  echo "Backend  → http://0.0.0.0:8000  (log: $LOGS/backend.log)"
+  firejail "${FJ_OPTS[@]}" -- \
+    env PATH="$SANDBOX_PATH" \
+    bash -c "cd '$ROOT/backend' && '$UV_BIN' run uvicorn kicker.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir src" \
+    > >(tee "$LOGS/backend.log") 2>&1 &
+  PIDS+=($!)
+
+  echo "Frontend → http://0.0.0.0:5173  (log: $LOGS/frontend.log)"
+  firejail "${FJ_OPTS[@]}" -- \
+    env PATH="$SANDBOX_PATH" \
+    bash -c "cd '$ROOT/frontend' && '$NPX_BIN' vite --port 5173 --host 0.0.0.0" \
+    > >(tee "$LOGS/frontend.log") 2>&1 &
+  PIDS+=($!)
+
+  echo
+  echo "Ctrl+C to stop both."
+  wait
+}
+
+cmd_init_test_db() {
+  require_firejail
+  setup_sandbox
+  if [[ -z "$UV_BIN" ]]; then echo "uv not found on PATH" >&2; exit 1; fi
+
+  firejail "${FJ_OPTS[@]}" -- \
+    env PATH="$SANDBOX_PATH" \
+    bash -c "cd '$ROOT/backend' && '$UV_BIN' run python -m kicker.scripts.seed_public --admin-password-stdin"
+}
+
+# ── Dispatch ─────────────────────────────────────────────────────────
+case "${1:---}" in
+  dev)            cmd_dev ;;
+  init-test-db)   cmd_init_test_db ;;
+  -h|--help)      usage ;;
+  --)             cmd_dev ;;  # no args → default to dev
+  *)              echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;
+esac

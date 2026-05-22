@@ -8,12 +8,14 @@ password in place). Match simulation is skipped if any matches already exist —
 delete the DB file by hand if you want a clean re-seed.
 
 Usage:
-  uv run python -m kicker.seed_public --admin-password PW [--games N] [--seed S]
+  uv run python -m kicker.scripts.seed_public --admin-password PW [--games N] [--seed S]
+  uv run python -m kicker.scripts.seed_public --admin-password-stdin [--games N] [--seed S]
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import random
 import shutil
 import sys
@@ -23,13 +25,13 @@ from pathlib import Path
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from . import elo
-from .auth import hash_password
-from .config import get_settings
-from .db import SessionLocal, engine
-from .models import Base, Match, MatchPlayer, User
+from .. import elo
+from ..auth import hash_password
+from ..config import get_settings
+from ..db import SessionLocal, engine
+from ..models import Base, Match, MatchPlayer, User
 
-ANIMAL_ASSETS_DIR = Path(__file__).resolve().parent / "assets" / "animals"
+ANIMAL_ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "animals"
 ADMIN_ANIMAL = "Tiger"
 
 
@@ -245,11 +247,16 @@ def _player_ratings(user: User) -> elo.PlayerRatings:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--admin-password", required=True, help=f"password for {ADMIN_ANIMAL} (admin)")
+    pw_group = ap.add_mutually_exclusive_group(required=True)
+    pw_group.add_argument("--admin-password", help=f"password for {ADMIN_ANIMAL} (admin)")
+    pw_group.add_argument("--admin-password-stdin", action="store_true", help="read password interactively")
     ap.add_argument("--games", type=int, default=500, help="number of games to simulate")
     ap.add_argument("--goals-to-win", type=int, default=5)
     ap.add_argument("--seed", type=int, default=42, help="rng seed for reproducibility")
     args = ap.parse_args(argv[1:])
+
+    if args.admin_password_stdin:
+        args.admin_password = getpass.getpass(f"Admin password for {ADMIN_ANIMAL}: ")
 
     if len(args.admin_password) < 12:
         print(

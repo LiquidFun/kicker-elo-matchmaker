@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="KICKER_", extra="ignore")
 
-    database_url: str = "sqlite:///./kicker.db"
+    database_url: str = "sqlite:///./storage/kicker.db"
     secret_key: str = "dev-secret-change-me"
     session_lifetime_days: int = 30
     password_link_lifetime_hours: int = 72
