@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useMatches, useUsers } from '../api/hooks';
-import type { Match, Mode, User } from '../api/types';
+import type { Match, MatchPlayer, Mode, User } from '../api/types';
 import Avatar from '../match/Avatar';
 
 const PAGE_SIZE = 50;
@@ -228,7 +228,7 @@ function TeamLine({
   align,
   isWinner,
 }: {
-  players: { user_id: number }[];
+  players: MatchPlayer[];
   usersById: Record<number, User>;
   align: 'left' | 'right';
   isWinner: boolean;
@@ -246,11 +246,12 @@ function TeamLine({
             </div>
           );
         }
+        const delta = p.rating_delta;
         return (
           <Link
             to={`/stats/users/${u.id}`}
             key={p.user_id}
-            className={`flex min-w-0 items-center gap-1 ${
+            className={`flex min-w-0 items-center gap-1.5 ${
               align === 'right' ? 'flex-row-reverse' : ''
             }`}
           >
@@ -261,6 +262,13 @@ function TeamLine({
               }`}
             >
               {u.name}
+            </span>
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] tabular-nums font-medium ${
+                delta >= 0 ? 'bg-pitch/10 text-pitch' : 'bg-accent/10 text-accent'
+              }`}
+            >
+              {delta >= 0 ? '+' : ''}{delta.toFixed(0)}
             </span>
           </Link>
         );
