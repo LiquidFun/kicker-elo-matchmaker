@@ -49,11 +49,7 @@ def _hash_token(raw: str) -> str:
 def create_session(db: SASession, user: models.User, user_agent: str | None) -> str:
     sid = _new_session_id()
     expires = datetime.now(UTC) + timedelta(days=_settings.session_lifetime_days)
-    db.add(
-        models.Session(
-            id=sid, user_id=user.id, expires_at=expires, user_agent=user_agent
-        )
-    )
+    db.add(models.Session(id=sid, user_id=user.id, expires_at=expires, user_agent=user_agent))
     db.commit()
     return sid
 
@@ -137,11 +133,7 @@ def create_password_set_token(db: SASession, user: models.User) -> str:
 def consume_password_set_token(db: SASession, raw: str) -> models.User:
     token = db.get(models.PasswordSetToken, _hash_token(raw))
     now = datetime.now(UTC)
-    if (
-        token is None
-        or token.used_at is not None
-        or token.expires_at.replace(tzinfo=UTC) < now
-    ):
+    if token is None or token.used_at is not None or token.expires_at.replace(tzinfo=UTC) < now:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token"
         )

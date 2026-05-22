@@ -20,7 +20,7 @@ import random
 import shutil
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func
@@ -47,16 +47,16 @@ class Animal:
 
 
 ANIMALS: list[Animal] = [
-    Animal("Tiger",    1750, 1700, 1750),
-    Animal("Lion",     1750, 1500, 1700),
-    Animal("Bear",     1600, 1750, 1650),
-    Animal("Wolf",     1680, 1680, 1700),
+    Animal("Tiger", 1750, 1700, 1750),
+    Animal("Lion", 1750, 1500, 1700),
+    Animal("Bear", 1600, 1750, 1650),
+    Animal("Wolf", 1680, 1680, 1700),
     Animal("Elephant", 1550, 1700, 1600),
-    Animal("Eagle",    1650, 1550, 1650),
-    Animal("Fox",      1600, 1600, 1650),
-    Animal("Rabbit",   1620, 1450, 1500),
-    Animal("Mouse",    1480, 1480, 1450),
-    Animal("Turtle",   1420, 1620, 1480),
+    Animal("Eagle", 1650, 1550, 1650),
+    Animal("Fox", 1600, 1600, 1650),
+    Animal("Rabbit", 1620, 1450, 1500),
+    Animal("Mouse", 1480, 1480, 1450),
+    Animal("Turtle", 1420, 1620, 1480),
 ]
 
 
@@ -71,15 +71,11 @@ def _stage_avatar(animal: Animal, storage_dir: Path) -> str:
     return f"/api/avatars/{filename}"
 
 
-def _upsert_animals(
-    db: Session, storage_dir: Path, admin_password: str
-) -> dict[str, User]:
+def _upsert_animals(db: Session, storage_dir: Path, admin_password: str) -> dict[str, User]:
     """Upsert the 10 animals. Tiger gets admin role + ``admin_password``."""
     out: dict[str, User] = {}
     for a in ANIMALS:
-        user = (
-            db.query(User).filter(func.lower(User.name) == a.name.lower()).one_or_none()
-        )
+        user = db.query(User).filter(func.lower(User.name) == a.name.lower()).one_or_none()
         avatar_url = _stage_avatar(a, storage_dir)
         is_admin = a.name == ADMIN_ANIMAL
         if user is None:
@@ -111,7 +107,7 @@ def _generate_schedule(total_games: int, rng: random.Random) -> list[datetime]:
     """Generate realistic timestamps: 3-10 games per day, ~10 min apart, starting at noon."""
     timestamps: list[datetime] = []
     # Work backwards from "today" so the most recent games are near the present.
-    day = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    day = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
     remaining = total_games
     while remaining > 0:
         games_today = min(remaining, rng.randint(3, 10))
@@ -280,7 +276,9 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     pw_group = ap.add_mutually_exclusive_group(required=True)
     pw_group.add_argument("--admin-password", help=f"password for {ADMIN_ANIMAL} (admin)")
-    pw_group.add_argument("--admin-password-stdin", action="store_true", help="read password interactively")
+    pw_group.add_argument(
+        "--admin-password-stdin", action="store_true", help="read password interactively"
+    )
     ap.add_argument("--games", type=int, default=500, help="number of games to simulate")
     ap.add_argument("--goals-to-win", type=int, default=5)
     ap.add_argument("--seed", type=int, default=42, help="rng seed for reproducibility")
@@ -320,10 +318,7 @@ def main(argv: list[str]) -> int:
                 _simulate_singles(db, players, true_skills, args.goals_to_win, rng, played_at)
         db.commit()
 
-    print(
-        f"seeded {len(ANIMALS)} animals ({ADMIN_ANIMAL} as admin), "
-        f"simulated {args.games} games"
-    )
+    print(f"seeded {len(ANIMALS)} animals ({ADMIN_ANIMAL} as admin), simulated {args.games} games")
     return 0
 
 

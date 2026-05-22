@@ -121,9 +121,7 @@ def doubles_deltas(
     more than a veteran even when they're teammates. The sign flips between
     teams; magnitudes can differ per player.
     """
-    diff = compute_diff(
-        lineup.team1_rating, lineup.team2_rating, team1_score, team2_score
-    )
+    diff = compute_diff(lineup.team1_rating, lineup.team2_rating, team1_score, team2_score)
     t1a, t1d = lineup.team1_attacker, lineup.team1_defender
     t2a, t2d = lineup.team2_attacker, lineup.team2_defender
     return {
@@ -218,6 +216,7 @@ def preview_outcomes(
     outcomes: list[tuple[int, int, dict[int, float]]] = []
 
     if isinstance(lineup, DoublesLineup):
+
         def per_user(t1: int, t2: int) -> dict[int, float]:
             ds = doubles_deltas(lineup, t1, t2)
             return {
@@ -227,6 +226,7 @@ def preview_outcomes(
                 lineup.team2_defender.user_id: ds[(lineup.team2_defender.user_id, "defender")],
             }
     else:
+
         def per_user(t1: int, t2: int) -> dict[int, float]:
             ds = singles_deltas(lineup, t1, t2)
             return {

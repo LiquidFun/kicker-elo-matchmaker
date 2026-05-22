@@ -5,8 +5,8 @@ import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PIL import Image
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -64,7 +64,7 @@ def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
     """Best-effort delete of a stored avatar. No-op for external URLs or missing files."""
     if not url or not url.startswith(_AVATAR_URL_PREFIX):
         return
-    filename = url[len(_AVATAR_URL_PREFIX):]
+    filename = url[len(_AVATAR_URL_PREFIX) :]
     if "/" in filename or filename in ("", ".", ".."):
         return
     with contextlib.suppress(OSError):
@@ -267,11 +267,7 @@ def lookup_password_token(
     token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
     row = db.get(models.PasswordSetToken, token_hash)
     now = datetime.now(UTC)
-    if (
-        row is None
-        or row.used_at is not None
-        or row.expires_at.replace(tzinfo=UTC) < now
-    ):
+    if row is None or row.used_at is not None or row.expires_at.replace(tzinfo=UTC) < now:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
     user = db.get(models.User, row.user_id)
     if user is None or user.deleted_at is not None:

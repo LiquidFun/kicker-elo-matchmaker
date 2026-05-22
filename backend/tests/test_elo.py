@@ -165,8 +165,13 @@ def test_k_for_games_endpoints():
 
 def test_rookie_singles_swing_is_larger_than_veteran():
     rookie = PlayerRatings(
-        user_id=1, attacker=1000, defender=1000, singles=1000,
-        games_attacker=0, games_defender=0, games_singles=0,
+        user_id=1,
+        attacker=1000,
+        defender=1000,
+        singles=1000,
+        games_attacker=0,
+        games_defender=0,
+        games_singles=0,
     )
     veteran = pr(2)  # defaults to established
     deltas = singles_deltas(SinglesLineup(rookie, veteran), 5, 4)
@@ -178,15 +183,18 @@ def test_rookie_singles_swing_is_larger_than_veteran():
 
 def test_rookie_doubles_teammate_moves_more_than_veteran_teammate():
     rookie = PlayerRatings(
-        user_id=1, attacker=1000, defender=1000, singles=1000,
-        games_attacker=0, games_defender=0, games_singles=0,
+        user_id=1,
+        attacker=1000,
+        defender=1000,
+        singles=1000,
+        games_attacker=0,
+        games_defender=0,
+        games_singles=0,
     )
     vet_partner = pr(2)
     vet_a = pr(3)
     vet_b = pr(4)
-    deltas = doubles_deltas(
-        DoublesLineup(rookie, vet_partner, vet_a, vet_b), 5, 4
-    )
+    deltas = doubles_deltas(DoublesLineup(rookie, vet_partner, vet_a, vet_b), 5, 4)
     # Both team-1 players see the same diff sign; rookie's |delta| is 2x.
     assert abs(deltas[(1, "attacker")]) == pytest.approx(2 * abs(deltas[(2, "defender")]))
 

@@ -119,11 +119,7 @@ def global_stats(
         db.query(models.User)
         .filter(
             models.User.deleted_at.is_(None),
-            (
-                models.User.games_attacker
-                + models.User.games_defender
-                + models.User.games_singles
-            )
+            (models.User.games_attacker + models.User.games_defender + models.User.games_singles)
             > 0,
         )
         .count()

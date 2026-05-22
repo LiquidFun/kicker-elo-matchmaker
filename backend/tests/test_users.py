@@ -8,9 +8,7 @@ def test_non_admin_cannot_create_user(client, admin_client):
     )
     admin_client.post("/api/auth/logout")
     admin_client.post("/api/auth/login", json={"name": "Alice", "password": "alicepw12345"})
-    r = admin_client.post(
-        "/api/users", json={"name": "Bob", "password": "bobpw1234"}
-    )
+    r = admin_client.post("/api/users", json={"name": "Bob", "password": "bobpw1234"})
     assert r.status_code == 403
 
 
@@ -60,9 +58,7 @@ def test_admin_cannot_delete_self(admin_client, admin_user):
 
 
 def test_admin_can_delete_other(admin_client):
-    r = admin_client.post(
-        "/api/users", json={"name": "Doomed", "password": "dpw12345"}
-    )
+    r = admin_client.post("/api/users", json={"name": "Doomed", "password": "dpw12345"})
     uid = r.json()["user"]["id"]
     r = admin_client.delete(f"/api/users/{uid}")
     assert r.status_code == 204
@@ -71,9 +67,7 @@ def test_admin_can_delete_other(admin_client):
 
 
 def test_reset_password_link(admin_client):
-    r = admin_client.post(
-        "/api/users", json={"name": "RP", "password": "rppw12345"}
-    )
+    r = admin_client.post("/api/users", json={"name": "RP", "password": "rppw12345"})
     uid = r.json()["user"]["id"]
     r = admin_client.post(f"/api/users/{uid}/password-link")
     assert r.status_code == 200
@@ -81,9 +75,7 @@ def test_reset_password_link(admin_client):
 
 
 def test_admin_can_change_role(admin_client):
-    r = admin_client.post(
-        "/api/users", json={"name": "Promo", "password": "pw12345678"}
-    )
+    r = admin_client.post("/api/users", json={"name": "Promo", "password": "pw12345678"})
     uid = r.json()["user"]["id"]
     r = admin_client.patch(f"/api/users/{uid}", json={"role": "admin"})
     assert r.status_code == 200
@@ -132,9 +124,7 @@ def test_self_password_change_requires_current(client, admin_client):
 def test_admin_can_set_password_without_current(admin_client):
     r = admin_client.post("/api/users", json={"name": "Forced", "password": "oldpw12345"})
     uid = r.json()["user"]["id"]
-    r = admin_client.post(
-        f"/api/users/{uid}/password", json={"new_password": "freshpw12345"}
-    )
+    r = admin_client.post(f"/api/users/{uid}/password", json={"new_password": "freshpw12345"})
     assert r.status_code == 200
 
 
@@ -229,6 +219,7 @@ def test_password_lookup_uses_post_body(client, admin_client):
     r = admin_client.post("/api/users", json={"name": "Lookup"})
     set_url = r.json()["password_set_url"]
     from urllib.parse import parse_qs, urlparse
+
     token = parse_qs(urlparse(set_url).query)["token"][0]
 
     client.post("/api/auth/logout")

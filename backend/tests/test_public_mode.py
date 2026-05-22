@@ -18,6 +18,7 @@ def public_client(client):
 @pytest.fixture
 def two_users(session_factory):
     from kicker.models import User
+
     with session_factory() as s:
         users = [User(name="Alice"), User(name="Bob"), User(name="Carol"), User(name="Dan")]
         s.add_all(users)
@@ -72,7 +73,10 @@ def test_anon_cannot_delete_match(public_client, two_users):
     r = public_client.post(
         "/api/matches",
         json={
-            "mode": "doubles", "goals_to_win": 5, "team1_score": 5, "team2_score": 0,
+            "mode": "doubles",
+            "goals_to_win": 5,
+            "team1_score": 5,
+            "team2_score": 0,
             "players": [
                 {"user_id": a, "team": 1, "position": "attacker"},
                 {"user_id": b, "team": 1, "position": "defender"},

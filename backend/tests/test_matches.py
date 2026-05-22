@@ -237,9 +237,7 @@ def test_settings_get_default_and_update(admin_client):
 
 
 def test_non_admin_cannot_change_settings(client, admin_client):
-    admin_client.post(
-        "/api/users", json={"name": "Regular", "password": "regpw12345"}
-    )
+    admin_client.post("/api/users", json={"name": "Regular", "password": "regpw12345"})
     admin_client.post("/api/auth/logout")
     admin_client.post("/api/auth/login", json={"name": "Regular", "password": "regpw12345"})
     r = admin_client.put("/api/settings", json={"default_goals_to_win": 9})

@@ -23,9 +23,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(
-        String(128, collation="NOCASE"), unique=True, index=True
-    )
+    name: Mapped[str] = mapped_column(String(128, collation="NOCASE"), unique=True, index=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default="user")
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -43,9 +41,7 @@ class User(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    __table_args__ = (
-        CheckConstraint("role IN ('admin', 'user')", name="role_valid"),
-    )
+    __table_args__ = (CheckConstraint("role IN ('admin', 'user')", name="role_valid"),)
 
 
 class Session(Base):

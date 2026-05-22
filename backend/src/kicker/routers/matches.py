@@ -25,8 +25,9 @@ def _validate_lineup(payload: schemas.MatchCreateIn) -> None:
     if len(set(ids)) != len(ids):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Duplicate players")
 
-    high, low = max(payload.team1_score, payload.team2_score), min(
-        payload.team1_score, payload.team2_score
+    high, low = (
+        max(payload.team1_score, payload.team2_score),
+        min(payload.team1_score, payload.team2_score),
     )
     if high != payload.goals_to_win or low >= payload.goals_to_win:
         raise HTTPException(
@@ -184,11 +185,7 @@ def list_matches(
         items_stmt = items_stmt.where(f)
 
     total = db.scalar(count_stmt) or 0
-    items_stmt = (
-        items_stmt.order_by(models.Match.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    items_stmt = items_stmt.order_by(models.Match.created_at.desc()).offset(offset).limit(limit)
     rows = db.scalars(items_stmt).unique().all()
     return schemas.MatchListOut(
         items=[schemas.MatchOut.model_validate(m) for m in rows],
