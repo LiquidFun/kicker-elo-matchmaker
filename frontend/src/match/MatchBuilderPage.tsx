@@ -891,12 +891,17 @@ function ScoreColumn({
           </button>
         );
       })}
-      {winningThisTeam && loserTeam !== null && loserScore !== null && (() => {
-        const delta = lookupTeamDelta(loserTeam, loserScore, team);
+      {(() => {
+        const active = winningThisTeam && loserTeam !== null && loserScore !== null;
+        const delta = active ? lookupTeamDelta(loserTeam, loserScore, team) : undefined;
         return (
           <div
             aria-label={`${goalsToWin} Tore`}
-            className="relative flex flex-1 items-center justify-center rounded-lg bg-pitch text-lg font-bold tabular-nums text-white shadow-sm ring-2 ring-pitch"
+            className={`relative flex flex-1 items-center justify-center rounded-lg text-lg font-bold tabular-nums shadow-sm ${
+              active
+                ? 'bg-pitch text-white ring-2 ring-pitch'
+                : 'bg-surface/40 text-ink2/20 ring-1 ring-line/30'
+            }`}
           >
             <span>{goalsToWin}</span>
             {delta !== undefined && (
