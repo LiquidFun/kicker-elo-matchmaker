@@ -1,9 +1,11 @@
 import contextlib
 import hashlib
+import io
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
+from PIL import Image
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -30,6 +32,27 @@ def _sniff_image(data: bytes) -> str | None:
     if len(data) >= 12 and data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "webp"
     return None
+
+
+_AVATAR_MAX_PX = 256
+
+
+def _resize_avatar(data: bytes) -> bytes:
+    """Resize to at most 256x256, center-crop to square, and encode as WebP."""
+    img = Image.open(io.BytesIO(data))
+    img = img.convert("RGBA") if img.mode == "RGBA" else img.convert("RGB")
+    # Center-crop to square
+    w, h = img.size
+    side = min(w, h)
+    left = (w - side) // 2
+    top = (h - side) // 2
+    img = img.crop((left, top, left + side, top + side))
+    # Downscale
+    if side > _AVATAR_MAX_PX:
+        img = img.resize((_AVATAR_MAX_PX, _AVATAR_MAX_PX), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP", quality=85)
+    return buf.getvalue()
 
 
 def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
@@ -198,9 +221,10 @@ def upload_avatar(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PNG, JPEG or WebP allowed"
         )
 
+    data = _resize_avatar(data)
     avatars_dir = Path(settings.storage_dir) / "avatars"
     avatars_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{secrets.token_hex(16)}.{ext}"
+    filename = f"{secrets.token_hex(16)}.webp"
     (avatars_dir / filename).write_bytes(data)
 
     previous = target.avatar_url
