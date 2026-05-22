@@ -20,6 +20,7 @@ import random
 import shutil
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import func
@@ -106,6 +107,32 @@ def _true_ratings(animals_by_name: dict[str, Animal]) -> dict[str, dict[str, flo
     }
 
 
+def _generate_schedule(total_games: int, rng: random.Random) -> list[datetime]:
+    """Generate realistic timestamps: 3-10 games per day, ~10 min apart, starting at noon."""
+    timestamps: list[datetime] = []
+    # Work backwards from "today" so the most recent games are near the present.
+    day = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    remaining = total_games
+    while remaining > 0:
+        games_today = min(remaining, rng.randint(3, 10))
+        session_times: list[datetime] = []
+        t = day
+        for _ in range(games_today):
+            # Exponential with mean 10 min, clipped to [3, 25] min
+            gap_min = max(3.0, min(25.0, rng.expovariate(1 / 10.0)))
+            t = t + timedelta(minutes=gap_min)
+            session_times.append(t)
+        timestamps.extend(session_times)
+        remaining -= games_today
+        day -= timedelta(days=1)
+        # Skip weekends ~60% of the time
+        while day.weekday() >= 5 and rng.random() < 0.6:
+            day -= timedelta(days=1)
+    # Oldest first
+    timestamps.reverse()
+    return timestamps
+
+
 def _sample_loser_score(win_prob_winner: float, goals: int, rng: random.Random) -> int:
     # Loser's goals as Binomial(2*goals, 1-p_winner), clipped below goals-1.
     # Gives ~4 goals at even matchups, ~1 at lopsided ones.
@@ -121,6 +148,7 @@ def _simulate_doubles(
     true_skills: dict[str, dict[str, float]],
     goals: int,
     rng: random.Random,
+    played_at: datetime,
 ) -> None:
     chosen = rng.sample(players, 4)
     # Random attacker/defender assignment within each pair
@@ -154,6 +182,7 @@ def _simulate_doubles(
         team1_score=t1_score,
         team2_score=t2_score,
         winner_team=1 if t1_score > t2_score else 2,
+        created_at=played_at,
         created_by_user_id=None,
     )
     db.add(match)
@@ -189,6 +218,7 @@ def _simulate_singles(
     true_skills: dict[str, dict[str, float]],
     goals: int,
     rng: random.Random,
+    played_at: datetime,
 ) -> None:
     p1, p2 = rng.sample(players, 2)
     win_prob_p1 = elo.expected_score(
@@ -209,6 +239,7 @@ def _simulate_singles(
         team1_score=s1,
         team2_score=s2,
         winner_team=1 if s1 > s2 else 2,
+        created_at=played_at,
         created_by_user_id=None,
     )
     db.add(match)
@@ -280,12 +311,13 @@ def main(argv: list[str]) -> int:
         rng = random.Random(args.seed)
         true_skills = _true_ratings({a.name: a for a in ANIMALS})
         players = list(users_by_name.values())
+        schedule = _generate_schedule(args.games, rng)
 
-        for _ in range(args.games):
+        for played_at in schedule:
             if rng.random() < 0.8:
-                _simulate_doubles(db, players, true_skills, args.goals_to_win, rng)
+                _simulate_doubles(db, players, true_skills, args.goals_to_win, rng, played_at)
             else:
-                _simulate_singles(db, players, true_skills, args.goals_to_win, rng)
+                _simulate_singles(db, players, true_skills, args.goals_to_win, rng, played_at)
         db.commit()
 
     print(

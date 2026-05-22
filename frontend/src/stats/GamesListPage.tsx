@@ -82,11 +82,7 @@ export default function GamesListPage() {
         ) : items.length === 0 ? (
           <div className="text-center text-sm text-ink2">Keine Spiele</div>
         ) : (
-          <ul className="space-y-2">
-            {items.map((m) => (
-              <MatchRow key={m.id} match={m} usersById={usersById} />
-            ))}
-          </ul>
+          <SessionList items={items} usersById={usersById} />
         )}
       </div>
 
@@ -143,6 +139,60 @@ function PagerButton({
     >
       {children}
     </button>
+  );
+}
+
+const SESSION_GAP_MS = 60 * 60 * 1000; // 1 hour
+
+function groupIntoSessions(matches: Match[]): Match[][] {
+  if (matches.length === 0) return [];
+  const sessions: Match[][] = [[matches[0]]];
+  for (let i = 1; i < matches.length; i++) {
+    const prev = new Date(matches[i - 1].created_at).getTime();
+    const curr = new Date(matches[i].created_at).getTime();
+    if (Math.abs(prev - curr) > SESSION_GAP_MS) {
+      sessions.push([matches[i]]);
+    } else {
+      sessions[sessions.length - 1].push(matches[i]);
+    }
+  }
+  return sessions;
+}
+
+function SessionList({
+  items,
+  usersById,
+}: {
+  items: Match[];
+  usersById: Record<number, User>;
+}) {
+  const sessions = useMemo(() => groupIntoSessions(items), [items]);
+  return (
+    <div className="space-y-5">
+      {sessions.map((session) => {
+        const key = session[0].id;
+        const single = session.length === 1;
+        return (
+          <div key={key}>
+            <div className="mb-2 flex items-center gap-2">
+              <div className="h-px flex-1 bg-line" />
+              <span className="text-sm font-semibold text-ink">
+                {formatSessionHeader(session[0].created_at)}
+              </span>
+              <span className="text-xs tabular-nums text-ink2">
+                · {session.length} {session.length === 1 ? 'Spiel' : 'Spiele'}
+              </span>
+              <div className="h-px flex-1 bg-line" />
+            </div>
+            <ul className={single ? '' : 'space-y-1 border-l-2 border-pitch/30 pl-2'}>
+              {session.map((m) => (
+                <MatchRow key={m.id} match={m} usersById={usersById} />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -217,6 +267,16 @@ function TeamLine({
       })}
     </div>
   );
+}
+
+const DAY_NAMES = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+function formatSessionHeader(iso: string): string {
+  const d = new Date(iso);
+  const day = DAY_NAMES[d.getDay()];
+  const time = d.getHours() < 17 ? 'Mittag' : 'Abend';
+  const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return `${day} ${time} – ${date}`;
 }
 
 function formatDate(iso: string): string {
