@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { useMatches, useUsers } from '../api/hooks';
-import type { Match, MatchPlayer, Mode, User } from '../api/types';
+import { api } from '../api/client';
+import { useDeleteMatch, useMatches, useMe, useUsers } from '../api/hooks';
+import type { Match, MatchList, MatchPlayer, Mode, User } from '../api/types';
 import Avatar from '../match/Avatar';
 
 const PAGE_SIZE = 50;
@@ -29,12 +30,28 @@ export default function GamesListPage() {
   const filter = parseFilter(params.get('mode'));
   const page = parsePage(params.get('page'));
 
+  const me = useMe();
+  const isAdmin = me.data?.role === 'admin';
   const usersQ = useUsers();
   const matchesQ = useMatches({
     mode: filter === 'all' ? undefined : filter,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   });
+  const latestQ = useMatches({ limit: 1 });
+  const latestMatchId = latestQ.data?.items?.[0]?.id ?? null;
+  const deleteMatch = useDeleteMatch();
+
+  async function downloadAllMatches() {
+    const data = await api.get<MatchList>(`/api/matches?limit=${total || 10000}&offset=0`);
+    const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'matches.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const usersById = useMemo(() => {
     const m: Record<number, User> = {};
@@ -69,7 +86,18 @@ export default function GamesListPage() {
           ←
         </Link>
         <div className="text-lg font-semibold">Spiele</div>
-        <div className="ml-auto text-xs text-ink2 tabular-nums">{total}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={downloadAllMatches}
+              className="rounded-lg bg-surface px-2 py-1 text-xs text-ink2 ring-1 ring-line hover:bg-line"
+            >
+              ↓ JSON
+            </button>
+          )}
+          <span className="text-xs text-ink2 tabular-nums">{total}</span>
+        </div>
       </div>
 
       <div className="px-3 pt-3">
@@ -82,7 +110,12 @@ export default function GamesListPage() {
         ) : items.length === 0 ? (
           <div className="text-center text-sm text-ink2">Keine Spiele</div>
         ) : (
-          <SessionList items={items} usersById={usersById} />
+          <SessionList
+            items={items}
+            usersById={usersById}
+            deletableId={isAdmin ? latestMatchId : null}
+            onDelete={(id) => deleteMatch.mutate(id)}
+          />
         )}
       </div>
 
@@ -162,9 +195,13 @@ function groupIntoSessions(matches: Match[]): Match[][] {
 function SessionList({
   items,
   usersById,
+  deletableId,
+  onDelete,
 }: {
   items: Match[];
   usersById: Record<number, User>;
+  deletableId: number | null;
+  onDelete: (id: number) => void;
 }) {
   const sessions = useMemo(() => groupIntoSessions(items), [items]);
   return (
@@ -186,7 +223,12 @@ function SessionList({
             </div>
             <ul className={single ? '' : 'space-y-1 border-l-2 border-pitch/30 pl-2'}>
               {session.map((m) => (
-                <MatchRow key={m.id} match={m} usersById={usersById} />
+                <MatchRow
+                  key={m.id}
+                  match={m}
+                  usersById={usersById}
+                  onDelete={m.id === deletableId ? () => onDelete(m.id) : undefined}
+                />
               ))}
             </ul>
           </div>
@@ -199,9 +241,11 @@ function SessionList({
 function MatchRow({
   match,
   usersById,
+  onDelete,
 }: {
   match: Match;
   usersById: Record<number, User>;
+  onDelete?: () => void;
 }) {
   const team1 = match.players.filter((p) => p.team === 1);
   const team2 = match.players.filter((p) => p.team === 2);
@@ -209,7 +253,18 @@ function MatchRow({
     <li className="rounded-xl bg-paper p-3 ring-1 ring-line">
       <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-ink2">
         <span>{match.mode === 'doubles' ? 'Doppel' : 'Einzel'}</span>
-        <span>{formatDate(match.created_at)}</span>
+        <span className="flex items-center gap-2">
+          <span>{formatDate(match.created_at)}</span>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => { if (confirm('Spiel löschen?')) onDelete(); }}
+              className="rounded px-1 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/10"
+            >
+              ✕
+            </button>
+          )}
+        </span>
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <TeamLine players={team1} usersById={usersById} align="right" isWinner={match.winner_team === 1} />

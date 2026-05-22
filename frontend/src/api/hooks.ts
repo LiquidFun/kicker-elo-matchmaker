@@ -84,6 +84,17 @@ export const useDeleteUser = () => {
   });
 };
 
+export const useDeleteMatch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/api/matches/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['matches'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+};
+
 export const useUpdateUser = () => {
   const qc = useQueryClient();
   return useMutation({
