@@ -19,6 +19,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -27,6 +35,9 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     role: Mapped[str] = mapped_column(String(16), default="user")
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), default=1, index=True
+    )
 
     rating_attacker: Mapped[float] = mapped_column(default=1600.0)
     rating_defender: Mapped[float] = mapped_column(default=1600.0)
@@ -41,7 +52,9 @@ class User(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    __table_args__ = (CheckConstraint("role IN ('admin', 'user')", name="role_valid"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'moderator', 'user')", name="role_valid"),
+    )
 
 
 class Session(Base):
@@ -79,6 +92,9 @@ class Match(Base):
     )
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), default=1, index=True
     )
 
     players: Mapped[list["MatchPlayer"]] = relationship(
@@ -120,6 +136,9 @@ class MatchPlayer(Base):
 class Setting(Base):
     __tablename__ = "settings"
 
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(256))
     updated_at: Mapped[datetime] = mapped_column(

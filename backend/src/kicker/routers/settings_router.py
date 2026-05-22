@@ -10,8 +10,8 @@ DEFAULT_GOALS_TO_WIN = 5
 KEY_GOALS_TO_WIN = "default_goals_to_win"
 
 
-def _get_goals_to_win(db: Session) -> int:
-    row = db.get(models.Setting, KEY_GOALS_TO_WIN)
+def _get_goals_to_win(db: Session, org_id: int) -> int:
+    row = db.get(models.Setting, (org_id, KEY_GOALS_TO_WIN))
     if row is None:
         return DEFAULT_GOALS_TO_WIN
     try:
@@ -22,21 +22,28 @@ def _get_goals_to_win(db: Session) -> int:
 
 @router.get("")
 def get_settings_endpoint(
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> schemas.SettingsOut:
-    return schemas.SettingsOut(default_goals_to_win=_get_goals_to_win(db))
+    return schemas.SettingsOut(default_goals_to_win=_get_goals_to_win(db, org_id))
 
 
 @router.put("")
 def put_settings(
     payload: schemas.SettingsIn,
-    _: models.User = Depends(auth.require_admin),
+    _: models.User = Depends(auth.require_moderator_or_admin),
+    org_id: int = Depends(auth.get_org_id),
     db: Session = Depends(get_db),
 ) -> schemas.SettingsOut:
-    row = db.get(models.Setting, KEY_GOALS_TO_WIN)
+    row = db.get(models.Setting, (org_id, KEY_GOALS_TO_WIN))
     if row is None:
-        db.add(models.Setting(key=KEY_GOALS_TO_WIN, value=str(payload.default_goals_to_win)))
+        db.add(
+            models.Setting(
+                organization_id=org_id,
+                key=KEY_GOALS_TO_WIN,
+                value=str(payload.default_goals_to_win),
+            )
+        )
     else:
         row.value = str(payload.default_goals_to_win)
     db.commit()

@@ -4,8 +4,31 @@ export class ApiError extends Error {
   }
 }
 
+let orgOverride: number | null = null;
+const orgOverrideListeners = new Set<() => void>();
+
+export function getOrgOverride(): number | null {
+  return orgOverride;
+}
+
+export function setOrgOverride(orgId: number | null) {
+  orgOverride = orgId;
+  orgOverrideListeners.forEach((cb) => cb());
+}
+
+export function onOrgOverrideChange(cb: () => void): () => void {
+  orgOverrideListeners.add(cb);
+  return () => orgOverrideListeners.delete(cb);
+}
+
+function applyOrgOverride(path: string): string {
+  if (orgOverride === null) return path;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}org_id=${orgOverride}`;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(applyOrgOverride(path), {
     method,
     credentials: 'include',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
@@ -15,7 +38,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(applyOrgOverride(path), {
     method,
     credentials: 'include',
     body: form,

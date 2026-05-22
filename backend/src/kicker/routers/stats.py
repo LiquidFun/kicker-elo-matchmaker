@@ -33,14 +33,18 @@ def _games_column(mode: Mode):
 def leaderboard(
     mode: Mode = Query("attacker"),
     limit: int = Query(100, ge=1, le=500),
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> list[schemas.UserOut]:
     rating = _rating_column(mode)
     games = _games_column(mode)
     rows = (
         db.query(models.User)
-        .filter(models.User.deleted_at.is_(None), games > 0)
+        .filter(
+            models.User.deleted_at.is_(None),
+            models.User.organization_id == org_id,
+            games > 0,
+        )
         .order_by(rating.desc(), games.desc(), models.User.name)
         .limit(limit)
         .all()
@@ -51,11 +55,11 @@ def leaderboard(
 @router.get("/users/{user_id}")
 def user_stats(
     user_id: int,
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ):
     user = db.get(models.User, user_id)
-    if user is None or user.deleted_at is not None:
+    if user is None or user.deleted_at is not None or user.organization_id != org_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     stmt = (
@@ -110,15 +114,24 @@ def user_stats(
 
 @router.get("/global")
 def global_stats(
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ):
-    doubles = db.query(models.Match).filter(models.Match.mode == "doubles").count()
-    singles = db.query(models.Match).filter(models.Match.mode == "singles").count()
+    doubles = (
+        db.query(models.Match)
+        .filter(models.Match.mode == "doubles", models.Match.organization_id == org_id)
+        .count()
+    )
+    singles = (
+        db.query(models.Match)
+        .filter(models.Match.mode == "singles", models.Match.organization_id == org_id)
+        .count()
+    )
     active_users = (
         db.query(models.User)
         .filter(
             models.User.deleted_at.is_(None),
+            models.User.organization_id == org_id,
             (models.User.games_attacker + models.User.games_defender + models.User.games_singles)
             > 0,
         )

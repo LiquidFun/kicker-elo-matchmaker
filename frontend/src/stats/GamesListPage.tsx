@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import { useDeleteMatch, useMatches, useMe, useUsers } from '../api/hooks';
+import { useCanManage, useDeleteMatch, useMatches, useUsers } from '../api/hooks';
 import type { Match, MatchList, MatchPlayer, Mode, User } from '../api/types';
 import Avatar from '../match/Avatar';
 import { SESSION_GAP_MS } from '../utils/session';
@@ -31,8 +31,7 @@ export default function GamesListPage() {
   const filter = parseFilter(params.get('mode'));
   const page = parsePage(params.get('page'));
 
-  const me = useMe();
-  const isAdmin = me.data?.role === 'admin';
+  const canManage = useCanManage();
   const usersQ = useUsers();
   const matchesQ = useMatches({
     mode: filter === 'all' ? undefined : filter,
@@ -88,7 +87,7 @@ export default function GamesListPage() {
         </Link>
         <div className="text-lg font-semibold">Spiele</div>
         <div className="ml-auto flex items-center gap-2">
-          {isAdmin && (
+          {canManage && (
             <button
               type="button"
               onClick={downloadAllMatches}
@@ -114,7 +113,7 @@ export default function GamesListPage() {
           <SessionList
             items={items}
             usersById={usersById}
-            deletableId={isAdmin ? latestMatchId : null}
+            deletableId={canManage ? latestMatchId : null}
             onDelete={(id) => deleteMatch.mutate(id)}
           />
         )}

@@ -11,14 +11,47 @@ from .models import Base
 from .routers import auth as auth_router
 from .routers import balance as balance_router
 from .routers import matches as matches_router
+from .routers import organizations as orgs_router
 from .routers import settings_router
 from .routers import stats as stats_router
 from .routers import users as users_router
 
 
+def _auto_migrate_if_needed() -> None:
+    """Run the org migration on existing SQLite databases that lack the new schema."""
+    settings = get_settings()
+    url = settings.database_url
+    if not url.startswith("sqlite:///"):
+        return
+    db_path = Path(url.removeprefix("sqlite:///"))
+    if not db_path.exists():
+        return  # fresh install — create_all will handle it
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    has_org_col = any(
+        row[1] == "organization_id" for row in con.execute("PRAGMA table_info(users)")
+    )
+    con.close()
+    if has_org_col:
+        return  # already migrated
+    from .scripts.migrate_orgs import migrate
+
+    migrate(db_path)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from .db import SessionLocal
+    from .models import Organization
+
+    _auto_migrate_if_needed()
     Base.metadata.create_all(bind=engine)
+    # Ensure the Default organization exists (for fresh installs).
+    with SessionLocal() as db:
+        if db.get(Organization, 1) is None:
+            db.add(Organization(id=1, name="Default"))
+            db.commit()
     yield
 
 
@@ -37,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router.router)
     app.include_router(users_router.password_router)
     app.include_router(matches_router.router)
+    app.include_router(orgs_router.router)
     app.include_router(balance_router.router)
     app.include_router(settings_router.router)
     app.include_router(stats_router.router)

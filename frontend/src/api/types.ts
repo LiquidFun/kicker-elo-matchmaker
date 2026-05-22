@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'user';
+export type Role = 'admin' | 'moderator' | 'user';
 export type Mode = 'doubles' | 'singles';
 export type Position = 'attacker' | 'defender' | 'singles';
 
@@ -8,6 +8,7 @@ export interface User {
   avatar_url: string | null;
   role: Role;
   has_password: boolean;
+  organization_id: number;
   rating_attacker: number;
   rating_defender: number;
   rating_singles: number;
@@ -121,4 +122,9 @@ export type LeaderboardMode = 'doubles' | 'attacker' | 'defender' | 'singles';
 
 export interface AppConfig {
   public_mode: boolean;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
 }

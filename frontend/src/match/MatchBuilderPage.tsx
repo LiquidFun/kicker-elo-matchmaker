@@ -13,9 +13,9 @@ import {
 
 import {
   useBalance,
+  useCanManage,
   useCreateMatch,
   useMatches,
-  useMe,
   usePreview,
   useSettings,
   useUsers,
@@ -102,12 +102,10 @@ function speakGerman(text: string): void {
 }
 
 export default function MatchBuilderPage() {
-  const me = useMe();
   const usersQ = useUsers();
   const settingsQ = useSettings();
   const balance = useBalance();
-  const isAdmin = me.data?.role === 'admin';
-
+  const canManage = useCanManage();
   const mode = useMatchStore((s) => s.mode);
   const slots = useMatchStore((s) => s.slots);
   const setMode = useMatchStore((s) => s.setMode);
@@ -479,7 +477,7 @@ export default function MatchBuilderPage() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        isAdmin={!!isAdmin}
+        canSaveDefault={canManage}
         goalsToWin={effectiveGoalsToWin}
         setGoalsToWin={setGoalsToWin}
         mode={mode}

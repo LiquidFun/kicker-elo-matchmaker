@@ -95,7 +95,8 @@ export default function UserProfilePage() {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           user={me.data}
-          isAdmin={me.data.role === 'admin'}
+          canManage={me.data.role === 'admin' || me.data.role === 'moderator'}
+          actorRole={me.data.role}
         />
       )}
 

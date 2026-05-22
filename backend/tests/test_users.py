@@ -131,7 +131,7 @@ def test_admin_can_set_password_without_current(admin_client):
 _PNG_1X1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
     b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-    b"\x00\x00\x00\rIDATx\x9cc\xfc\xff\xff?\x00\x05\xfe\x02\xfe\xa3\xb6\xe5\xc7"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\xf0\x1f\x00\x05\x00\x01\xff\x89\x99=\x1d"
     b"\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
@@ -149,7 +149,7 @@ def test_self_avatar_upload(client, admin_client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["avatar_url"].startswith("/api/avatars/")
-    assert body["avatar_url"].endswith(".png")
+    assert body["avatar_url"].endswith(".webp")
 
 
 def test_non_admin_cannot_upload_other_avatar(client, admin_client):

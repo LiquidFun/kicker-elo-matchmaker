@@ -7,7 +7,7 @@ import {
   useUpdateUser,
   useUploadAvatar,
 } from '../api/hooks';
-import type { User } from '../api/types';
+import type { Role, User } from '../api/types';
 import Avatar from '../match/Avatar';
 import Modal from '../components/Modal';
 
@@ -15,57 +15,66 @@ export default function EditUserDialog({
   open,
   onClose,
   user,
-  isAdmin,
+  canManage,
+  actorRole,
 }: {
   open: boolean;
   onClose: () => void;
   user: User;
-  isAdmin: boolean;
+  canManage: boolean;
+  actorRole: Role;
 }) {
   return (
     <Modal open={open} onClose={onClose} title="Profil bearbeiten">
       <div className="space-y-5">
         <AvatarSection user={user} />
-        <NameSection user={user} canEdit={isAdmin} />
-        {isAdmin && <RoleSection user={user} />}
-        <PasswordSection user={user} requireCurrent={!isAdmin} />
+        <NameSection user={user} canEdit={canManage} />
+        {canManage && <RoleSection user={user} actorRole={actorRole} />}
+        <PasswordSection user={user} requireCurrent={!canManage} />
       </div>
     </Modal>
   );
 }
 
-function RoleSection({ user }: { user: User }) {
+const ROLE_LABEL: Record<string, string> = {
+  user: 'Benutzer',
+  moderator: 'Moderator',
+  admin: 'Admin',
+};
+
+function RoleSection({ user, actorRole }: { user: User; actorRole: string }) {
   const me = useMe();
   const update = useUpdateUser();
   const isSelf = me.data?.id === user.id;
+  const roles = actorRole === 'admin'
+    ? (['user', 'moderator', 'admin'] as const)
+    : (['user', 'moderator'] as const);
 
-  function onToggle() {
-    const next = user.role === 'admin' ? 'user' : 'admin';
-    if (next === 'user' && isSelf) {
+  function setRole(next: string) {
+    if (next === user.role) return;
+    if (isSelf && user.role === 'admin' && next !== 'admin') {
       if (!confirm('Eigene Admin-Rechte wirklich entziehen?')) return;
     }
-    update.mutate({ id: user.id, role: next });
+    update.mutate({ id: user.id, role: next as 'admin' | 'moderator' | 'user' });
   }
 
   return (
     <div>
       <div className="mb-1 text-xs text-ink2">Rolle</div>
-      <div className="flex items-center gap-3">
-        <span className="text-sm">
-          {user.role === 'admin' ? 'Admin' : 'Benutzer'}
-        </span>
-        <button
-          type="button"
-          onClick={onToggle}
-          disabled={update.isPending}
-          className="rounded-md bg-paper px-2 py-1 text-xs text-ink ring-1 ring-line disabled:opacity-50"
-        >
-          {update.isPending
-            ? '…'
-            : user.role === 'admin'
-              ? '↓ Zu Benutzer'
-              : '↑ Zu Admin'}
-        </button>
+      <div className="flex rounded-lg bg-paper p-0.5 ring-1 ring-line">
+        {roles.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setRole(r)}
+            disabled={update.isPending}
+            className={`flex-1 rounded-md py-1.5 text-sm ${
+              user.role === r ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+            }`}
+          >
+            {ROLE_LABEL[r]}
+          </button>
+        ))}
       </div>
     </div>
   );

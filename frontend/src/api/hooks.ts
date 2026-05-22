@@ -9,7 +9,9 @@ import type {
   MatchList,
   MatchPlayerInput,
   Mode,
+  Organization,
   PreviewResult,
+  Role,
   Settings,
   User,
   UserCreateResult,
@@ -69,7 +71,7 @@ export const useCreateUser = () => {
   return useMutation({
     mutationFn: (vars: {
       name: string;
-      role?: 'admin' | 'user';
+      role?: Role;
       password?: string;
     }) => api.post<UserCreateResult>('/api/users', vars),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
@@ -240,3 +242,54 @@ export const useGlobalStats = () =>
     queryKey: ['global-stats'],
     queryFn: () => api.get<GlobalStats>('/api/stats/global'),
   });
+
+export const useCanManage = () => {
+  const me = useMe();
+  const role = me.data?.role;
+  return role === 'admin' || role === 'moderator';
+};
+
+export const useCurrentOrganization = () => {
+  const me = useMe();
+  return useQuery({
+    queryKey: ['current-organization'],
+    queryFn: () => api.get<Organization>('/api/organizations/current'),
+    enabled: me.data !== null && me.data !== undefined,
+  });
+};
+
+export const useOrganizations = (enabled = true) =>
+  useQuery({
+    queryKey: ['organizations'],
+    queryFn: () => api.get<Organization[]>('/api/organizations'),
+    enabled,
+  });
+
+export const useCreateOrganization = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string }) =>
+      api.post<Organization>('/api/organizations', vars),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organizations'] }),
+  });
+};
+
+export const useUpdateOrganization = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; name: string }) =>
+      api.patch<Organization>(`/api/organizations/${vars.id}`, { name: vars.name }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['organizations'] });
+      qc.invalidateQueries({ queryKey: ['current-organization'] });
+    },
+  });
+};
+
+export const useDeleteOrganization = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/api/organizations/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organizations'] }),
+  });
+};

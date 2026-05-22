@@ -1,13 +1,22 @@
 import { FormEvent, useState } from 'react';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import {
+  useCanManage,
+  useCreateOrganization,
   useCreateUser,
+  useCurrentOrganization,
+  useDeleteOrganization,
   useDeleteUser,
   useMe,
+  useOrganizations,
   useResetPasswordLink,
+  useUpdateOrganization,
   useUsers,
 } from '../api/hooks';
-import type { User } from '../api/types';
+import { getOrgOverride, setOrgOverride } from '../api/client';
+import type { Role, User } from '../api/types';
 import Avatar from '../match/Avatar';
 import Modal from '../components/Modal';
 import EditUserDialog from './EditUserDialog';
@@ -15,17 +24,48 @@ import EditUserDialog from './EditUserDialog';
 export default function AdminUsersPage() {
   const usersQ = useUsers();
   const me = useMe();
+  const qc = useQueryClient();
   const isAdmin = me.data?.role === 'admin';
+  const canManage = useCanManage();
+  const currentOrgQ = useCurrentOrganization();
+  const orgsQ = useOrganizations(!!isAdmin);
   const [createOpen, setCreateOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const editing = usersQ.data?.find((u) => u.id === editingId) ?? null;
 
+  function switchOrg(orgId: number | null) {
+    setOrgOverride(orgId);
+    qc.invalidateQueries({ queryKey: ['users'] });
+    qc.invalidateQueries({ queryKey: ['matches'] });
+  }
+
+  const orgName = getOrgOverride()
+    ? orgsQ.data?.find((o) => o.id === getOrgOverride())?.name
+    : currentOrgQ.data?.name;
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-line bg-paper p-3">
-        <div className="text-sm text-ink2">{usersQ.data?.length ?? 0} Benutzer</div>
-        {isAdmin && (
+      {/* Org header */}
+      <div className="border-b border-line bg-paper px-3 py-2">
+        {isAdmin && orgsQ.data ? (
+          <OrgBar
+            orgs={orgsQ.data}
+            currentOrgId={getOrgOverride() ?? me.data?.organization_id ?? 1}
+            ownOrgId={me.data?.organization_id ?? 1}
+            onSwitch={switchOrg}
+          />
+        ) : (
+          <div className="text-sm text-ink2">
+            Organisation: <span className="font-medium text-ink">{orgName ?? '…'}</span>
+          </div>
+        )}
+      </div>
+
+      {/* User list header */}
+      <div className="flex items-center justify-between gap-2 border-b border-line bg-paper px-3 py-2">
+        <span className="text-sm text-ink2">{usersQ.data?.length ?? 0} Benutzer</span>
+        {canManage && (
           <button
             onClick={() => setCreateOpen(true)}
             className="rounded-lg bg-pitch px-3 py-1.5 text-sm font-semibold text-white"
@@ -46,11 +86,12 @@ export default function AdminUsersPage() {
         ))}
       </div>
 
-      {isAdmin && (
+      {canManage && (
         <CreateUserModal
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           onLink={setLink}
+          actorRole={me.data?.role ?? 'user'}
         />
       )}
 
@@ -59,7 +100,8 @@ export default function AdminUsersPage() {
           open
           onClose={() => setEditingId(null)}
           user={editing}
-          isAdmin={!!isAdmin}
+          canManage={canManage}
+          actorRole={me.data?.role ?? 'user'}
         />
       )}
 
@@ -92,9 +134,9 @@ function UserRow({
   const me = useMe();
   const del = useDeleteUser();
   const link = useResetPasswordLink();
-  const isAdmin = me.data?.role === 'admin';
+  const canManage = useCanManage();
   const isSelf = me.data?.id === user.id;
-  const canEdit = isAdmin || isSelf;
+  const canEdit = canManage || isSelf;
 
   function onDelete(e: React.MouseEvent) {
     e.stopPropagation();
@@ -125,6 +167,11 @@ function UserRow({
               admin
             </span>
           )}
+          {user.role === 'moderator' && (
+            <span className="ml-2 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+              mod
+            </span>
+          )}
           {!user.has_password && (
             <span className="ml-2 text-[10px] uppercase tracking-wider text-ink2">
               gast
@@ -145,7 +192,7 @@ function UserRow({
           <PencilIcon />
         </button>
       )}
-      {isAdmin && (
+      {canManage && (
         <>
           <button
             onClick={onResetLink}
@@ -189,14 +236,16 @@ function CreateUserModal({
   open,
   onClose,
   onLink,
+  actorRole,
 }: {
   open: boolean;
   onClose: () => void;
   onLink: (url: string) => void;
+  actorRole: Role;
 }) {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'user'>('user');
+  const [role, setRole] = useState<Role>('user');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateUser();
 
@@ -268,13 +317,24 @@ function CreateUserModal({
             </button>
             <button
               type="button"
-              onClick={() => setRole('admin')}
+              onClick={() => setRole('moderator')}
               className={`flex-1 rounded-md py-1.5 text-sm ${
-                role === 'admin' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+                role === 'moderator' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
               }`}
             >
-              Admin
+              Moderator
             </button>
+            {actorRole === 'admin' && (
+              <button
+                type="button"
+                onClick={() => setRole('admin')}
+                className={`flex-1 rounded-md py-1.5 text-sm ${
+                  role === 'admin' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+                }`}
+              >
+                Admin
+              </button>
+            )}
           </div>
         </Field>
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -310,6 +370,149 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs text-ink2">{label}</span>
       {children}
     </label>
+  );
+}
+
+function OrgBar({
+  orgs,
+  currentOrgId,
+  ownOrgId,
+  onSwitch,
+}: {
+  orgs: { id: number; name: string }[];
+  currentOrgId: number;
+  ownOrgId: number;
+  onSwitch: (orgId: number | null) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [editName, setEditName] = useState('');
+  const createOrg = useCreateOrganization();
+  const updateOrg = useUpdateOrganization();
+  const deleteOrg = useDeleteOrganization();
+
+  const currentOrg = orgs.find((o) => o.id === currentOrgId);
+
+  function onAdd(e: FormEvent) {
+    e.preventDefault();
+    createOrg.mutate(
+      { name: newName.trim() },
+      {
+        onSuccess: () => {
+          setNewName('');
+          setAdding(false);
+        },
+      },
+    );
+  }
+
+  function onRename(e: FormEvent) {
+    e.preventDefault();
+    updateOrg.mutate(
+      { id: currentOrgId, name: editName.trim() },
+      { onSuccess: () => setEditing(false) },
+    );
+  }
+
+  function startEditing() {
+    setEditName(currentOrg?.name ?? '');
+    setEditing(true);
+    setAdding(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-ink2">Organisation:</span>
+        <select
+          value={currentOrgId}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            onSwitch(v === ownOrgId ? null : v);
+          }}
+          className="flex-1 rounded-lg bg-surface px-2 py-1.5 text-sm text-ink ring-1 ring-line"
+        >
+          {orgs.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={startEditing}
+          className="rounded-lg bg-surface px-2 py-1.5 text-xs text-ink ring-1 ring-line"
+          title="Umbenennen"
+        >
+          ✎
+        </button>
+        <button
+          type="button"
+          onClick={() => { setAdding(!adding); setEditing(false); }}
+          className="rounded-lg bg-pitch px-2 py-1.5 text-xs font-semibold text-white"
+          title="Neue Organisation"
+        >
+          +
+        </button>
+        {currentOrgId !== 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm('Organisation löschen?')) return;
+              deleteOrg.mutate(currentOrgId, {
+                onSuccess: () => onSwitch(null),
+              });
+            }}
+            disabled={deleteOrg.isPending}
+            className="rounded-lg bg-surface px-2 py-1.5 text-xs text-accent ring-1 ring-line disabled:opacity-50"
+            title="Löschen"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {adding && (
+        <form onSubmit={onAdd} className="flex items-center gap-2">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Name der neuen Organisation"
+            required
+            className="flex-1 rounded-lg bg-surface px-2 py-1.5 text-sm outline-none ring-1 ring-line focus:ring-pitch"
+          />
+          <button
+            type="submit"
+            disabled={createOrg.isPending}
+            className="rounded-lg bg-pitch px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {createOrg.isPending ? '…' : 'Erstellen'}
+          </button>
+        </form>
+      )}
+      {editing && (
+        <form onSubmit={onRename} className="flex items-center gap-2">
+          <input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            required
+            className="flex-1 rounded-lg bg-surface px-2 py-1.5 text-sm outline-none ring-1 ring-line focus:ring-pitch"
+          />
+          <button
+            type="submit"
+            disabled={updateOrg.isPending || editName.trim() === currentOrg?.name}
+            className="rounded-lg bg-pitch px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {updateOrg.isPending ? '…' : 'Speichern'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="rounded-lg bg-surface px-2 py-1.5 text-xs text-ink2 ring-1 ring-line"
+          >
+            Abbrechen
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 

@@ -48,12 +48,16 @@ def _lineup_to_schema(lu: elo.Lineup) -> schemas.LineupOut:
 @router.post("/balance")
 def balance(
     payload: schemas.BalanceIn,
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> schemas.BalanceOut:
     if len(set(payload.player_ids)) != 4:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Need 4 distinct players")
     users = _load_players(db, payload.player_ids)
+    if any(u.organization_id != org_id for u in users.values()):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "All players must belong to the same organization"
+        )
     ratings = _to_ratings([users[i] for i in payload.player_ids])
     best, alternatives = elo.best_balanced_lineup(ratings)
     return schemas.BalanceOut(
@@ -65,7 +69,7 @@ def balance(
 @router.post("/preview")
 def preview(
     payload: schemas.PreviewIn,
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> schemas.PreviewOut:
     ids = [p.user_id for p in payload.players]
@@ -77,6 +81,10 @@ def preview(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Singles requires 2 players")
 
     users = _load_players(db, ids)
+    if any(u.organization_id != org_id for u in users.values()):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "All players must belong to the same organization"
+        )
     ratings = {
         uid: elo.PlayerRatings(
             user_id=uid,

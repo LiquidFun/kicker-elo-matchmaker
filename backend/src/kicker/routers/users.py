@@ -17,6 +17,15 @@ from ..db import get_db
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+def _can_manage(actor: models.User, target: models.User) -> bool:
+    """Check if actor can manage target (edit password, avatar, etc.)."""
+    if actor.id == target.id:
+        return True
+    if actor.role == "admin":
+        return True
+    return actor.role == "moderator" and actor.organization_id == target.organization_id
+
+
 _IMAGE_MAGIC: list[tuple[bytes, str]] = [
     (b"\x89PNG\r\n\x1a\n", "png"),
     (b"\xff\xd8\xff", "jpg"),
@@ -73,12 +82,12 @@ def _delete_avatar_file(url: str | None, storage_dir: str) -> None:
 
 @router.get("")
 def list_users(
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> list[schemas.UserOut]:
     rows = (
         db.query(models.User)
-        .filter(models.User.deleted_at.is_(None))
+        .filter(models.User.deleted_at.is_(None), models.User.organization_id == org_id)
         .order_by(models.User.name)
         .all()
     )
@@ -88,13 +97,17 @@ def list_users(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: schemas.UserCreateIn,
-    _: models.User = Depends(auth.require_admin),
+    actor: models.User = Depends(auth.require_moderator_or_admin),
+    org_id: int = Depends(auth.get_org_id),
     db: Session = Depends(get_db),
 ) -> schemas.UserCreateOut:
+    if actor.role == "moderator" and payload.role == "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Moderators cannot create admins")
     user = models.User(
         name=payload.name,
         role=payload.role,
         password_hash=auth.hash_password(payload.password) if payload.password else None,
+        organization_id=org_id,
     )
     db.add(user)
     try:
@@ -122,11 +135,19 @@ def update_user(
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    if actor.role != "admin" and actor.id != user_id:
+    is_self = actor.id == user_id
+    is_admin = actor.role == "admin"
+    is_mod_for_target = (
+        actor.role == "moderator" and actor.organization_id == target.organization_id
+    )
+    if not is_admin and not is_mod_for_target and not is_self:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot edit other users")
-    if payload.role is not None and actor.role != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
-    if payload.name is not None and actor.role != "admin":
+    if payload.role is not None:
+        if not is_admin and not is_mod_for_target:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change role")
+        if actor.role == "moderator" and payload.role == "admin":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Moderators cannot promote to admin")
+    if payload.name is not None and not is_admin and not is_mod_for_target:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change name")
     provided = payload.model_dump(exclude_unset=True)
     for field in ("name", "role"):
@@ -144,7 +165,7 @@ def update_user(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    actor: models.User = Depends(auth.require_admin),
+    actor: models.User = Depends(auth.require_moderator_or_admin),
     db: Session = Depends(get_db),
 ) -> None:
     if actor.id == user_id:
@@ -152,6 +173,10 @@ def delete_user(
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if actor.role == "moderator" and target.organization_id != actor.organization_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Cannot delete users from other organizations"
+        )
     target.deleted_at = models.utcnow()
     db.query(models.Session).filter(models.Session.user_id == user_id).delete()
     db.commit()
@@ -167,7 +192,7 @@ def change_password(
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    if actor.role != "admin" and actor.id != user_id:
+    if not _can_manage(actor, target):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' password")
     if actor.id == user_id and (
         not payload.current_password
@@ -189,7 +214,7 @@ def delete_avatar(
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    if actor.role != "admin" and actor.id != user_id:
+    if not _can_manage(actor, target):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' avatar")
 
     previous = target.avatar_url
@@ -210,7 +235,7 @@ def upload_avatar(
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    if actor.role != "admin" and actor.id != user_id:
+    if not _can_manage(actor, target):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot change other users' avatar")
 
     settings = get_settings()
@@ -243,12 +268,16 @@ def upload_avatar(
 @router.post("/{user_id}/password-link")
 def issue_password_link(
     user_id: int,
-    _: models.User = Depends(auth.require_admin),
+    actor: models.User = Depends(auth.require_moderator_or_admin),
     db: Session = Depends(get_db),
 ) -> dict:
     target = db.get(models.User, user_id)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not _can_manage(actor, target):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Cannot manage users from other organizations"
+        )
     db.query(models.PasswordSetToken).filter(
         models.PasswordSetToken.user_id == user_id,
         models.PasswordSetToken.used_at.is_(None),

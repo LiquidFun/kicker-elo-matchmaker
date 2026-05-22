@@ -102,10 +102,17 @@ def _build_singles_lineup(
 def create_match(
     payload: schemas.MatchCreateIn,
     actor: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> schemas.MatchOut:
     _validate_lineup(payload)
     users = _load_players_or_404(db, [p.user_id for p in payload.players])
+    # Validate all players belong to the effective org
+    player_orgs = {u.organization_id for u in users.values()}
+    if player_orgs != {org_id}:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "All players must belong to the same organization"
+        )
     ratings = _player_ratings(users)
 
     if payload.mode == "doubles":
@@ -123,6 +130,7 @@ def create_match(
         team2_score=payload.team2_score,
         winner_team=winner_team,
         created_by_user_id=actor.id if actor is not None else None,
+        organization_id=org_id,
     )
     db.add(match)
     db.flush()
@@ -154,20 +162,21 @@ def create_match(
 @router.get("")
 def list_matches(
     actor: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1),
     offset: int = Query(0, ge=0),
     mode: schemas.Mode | None = None,
     user_id: int | None = None,
 ) -> schemas.MatchListOut:
-    is_admin = actor is not None and actor.role == "admin"
-    if not is_admin and limit > NON_ADMIN_LIMIT_MAX:
+    is_privileged = actor is not None and actor.role in ("admin", "moderator")
+    if not is_privileged and limit > NON_ADMIN_LIMIT_MAX:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             f"limit must be <= {NON_ADMIN_LIMIT_MAX} for non-admins",
         )
 
-    filters = []
+    filters = [models.Match.organization_id == org_id]
     if mode is not None:
         filters.append(models.Match.mode == mode)
 
@@ -196,11 +205,11 @@ def list_matches(
 @router.get("/{match_id}")
 def get_match(
     match_id: int,
-    _: models.User | None = Depends(auth.public_or_user),
+    org_id: int = Depends(auth.get_org_id_public),
     db: Session = Depends(get_db),
 ) -> schemas.MatchOut:
     m = db.get(models.Match, match_id)
-    if m is None:
+    if m is None or m.organization_id != org_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Match not found")
     return schemas.MatchOut.model_validate(m)
 
@@ -208,13 +217,19 @@ def get_match(
 @router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_match(
     match_id: int,
-    _: models.User = Depends(auth.require_admin),
+    _: models.User = Depends(auth.require_moderator_or_admin),
+    org_id: int = Depends(auth.get_org_id),
     db: Session = Depends(get_db),
 ) -> None:
     m = db.get(models.Match, match_id)
-    if m is None:
+    if m is None or m.organization_id != org_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Match not found")
-    latest = db.query(models.Match).order_by(models.Match.id.desc()).first()
+    latest = (
+        db.query(models.Match)
+        .filter(models.Match.organization_id == org_id)
+        .order_by(models.Match.id.desc())
+        .first()
+    )
     if latest is None or latest.id != match_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

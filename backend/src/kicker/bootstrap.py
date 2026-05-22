@@ -7,7 +7,7 @@ import sys
 
 from .auth import hash_password
 from .db import SessionLocal, engine
-from .models import Base, User
+from .models import Base, Organization, User
 
 
 def main(argv: list[str]) -> int:
@@ -18,6 +18,9 @@ def main(argv: list[str]) -> int:
     name = name.strip()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
+        if db.get(Organization, 1) is None:
+            db.add(Organization(id=1, name="Default"))
+            db.flush()
         if db.query(User).filter(User.name == name).first():
             print(f"user {name!r} already exists", file=sys.stderr)
             return 1
@@ -26,6 +29,7 @@ def main(argv: list[str]) -> int:
                 name=name,
                 role="admin",
                 password_hash=hash_password(password),
+                organization_id=1,
             )
         )
         db.commit()

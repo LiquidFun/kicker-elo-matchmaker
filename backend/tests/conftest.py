@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from kicker import db as db_module
 from kicker.auth import hash_password
 from kicker.main import create_app
-from kicker.models import Base, User
+from kicker.models import Base, Organization, User
 
 
 @pytest.fixture
@@ -34,6 +34,11 @@ def engine():
         cur.close()
 
     Base.metadata.create_all(bind=eng)
+    # Ensure the Default organization exists for FK constraints.
+    Session = sessionmaker(bind=eng)
+    with Session() as s:
+        s.add(Organization(id=1, name="Default"))
+        s.commit()
     yield eng
     eng.dispose()
 

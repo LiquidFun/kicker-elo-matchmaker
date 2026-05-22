@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Mode = Literal["doubles", "singles"]
 Position = Literal["attacker", "defender", "singles"]
-Role = Literal["admin", "user"]
+Role = Literal["admin", "moderator", "user"]
 
 
 def _trim_name(v: str) -> str:
@@ -23,6 +23,7 @@ class UserOut(BaseModel):
     avatar_url: str | None
     role: Role
     has_password: bool
+    organization_id: int
     rating_attacker: float
     rating_defender: float
     rating_singles: float
@@ -39,6 +40,7 @@ class UserOut(BaseModel):
             avatar_url=user.avatar_url,
             role=user.role,
             has_password=user.password_hash is not None,
+            organization_id=user.organization_id,
             rating_attacker=user.rating_attacker,
             rating_defender=user.rating_defender,
             rating_singles=user.rating_singles,
@@ -183,3 +185,18 @@ class SettingsOut(BaseModel):
 
 class SettingsIn(BaseModel):
     default_goals_to_win: int = Field(ge=1, le=99)
+
+
+class OrganizationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class OrganizationCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+
+
+class OrganizationUpdateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=128)

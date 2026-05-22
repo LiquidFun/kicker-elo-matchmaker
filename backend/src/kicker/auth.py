@@ -121,6 +121,58 @@ def require_admin(user: models.User = Depends(get_current_user)) -> models.User:
     return user
 
 
+def require_moderator_or_admin(
+    user: models.User = Depends(get_current_user),
+) -> models.User:
+    if user.role not in ("admin", "moderator"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Moderator or admin required"
+        )
+    return user
+
+
+def get_org_id(
+    request: Request,
+    user: models.User = Depends(get_current_user),
+) -> int:
+    """Return the effective org ID for scoping queries.
+
+    Global admins can pass ``?org_id=N`` to operate in another org's context.
+    All other users are locked to their own org.
+    """
+    return _resolve_org_override(request, user)
+
+
+def get_org_id_public(
+    request: Request,
+    user: models.User | None = Depends(public_or_user),
+) -> int:
+    """Like ``get_org_id`` but for public-or-user endpoints.
+
+    Anonymous access in public mode defaults to the Default org (id=1).
+    """
+    if user is None:
+        return 1
+    return _resolve_org_override(request, user)
+
+
+def _resolve_org_override(request: Request, user: models.User) -> int:
+    raw = request.query_params.get("org_id")
+    if raw is None:
+        return user.organization_id
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only global admins can switch org context",
+        )
+    try:
+        return int(raw)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="org_id must be an integer"
+        ) from None
+
+
 def create_password_set_token(db: SASession, user: models.User) -> str:
     raw = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw)

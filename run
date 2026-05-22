@@ -12,6 +12,7 @@ Usage: ./run [command]
 Commands:
   dev            Start backend + frontend dev servers (default)
   init-test-db   Seed the database with demo animals + simulated games
+  migrate        Run database migrations (e.g. add organizations)
 
 Options:
   -h, --help     Show this help
@@ -116,10 +117,21 @@ cmd_init_test_db() {
     bash -c "cd '$ROOT/backend' && '$UV_BIN' run python -m kicker.scripts.seed_public --admin-password-stdin"
 }
 
+cmd_migrate() {
+  require_firejail
+  setup_sandbox
+  if [[ -z "$UV_BIN" ]]; then echo "uv not found on PATH" >&2; exit 1; fi
+
+  firejail "${FJ_OPTS[@]}" -- \
+    env PATH="$SANDBOX_PATH" UV_LINK_MODE=copy \
+    bash -c "cd '$ROOT/backend' && '$UV_BIN' run python -m kicker.scripts.migrate_orgs"
+}
+
 # ── Dispatch ─────────────────────────────────────────────────────────
 case "${1:---}" in
   dev)            cmd_dev ;;
   init-test-db)   cmd_init_test_db ;;
+  migrate)        cmd_migrate ;;
   -h|--help)      usage ;;
   --)             cmd_dev ;;  # no args → default to dev
   *)              echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;

@@ -6,7 +6,7 @@ import { useTheme } from '../theme';
 export default function SettingsModal({
   open,
   onClose,
-  isAdmin,
+  canSaveDefault,
   goalsToWin,
   setGoalsToWin,
   mode,
@@ -14,7 +14,7 @@ export default function SettingsModal({
 }: {
   open: boolean;
   onClose: () => void;
-  isAdmin: boolean;
+  canSaveDefault: boolean;
   goalsToWin: number;
   setGoalsToWin: (n: number) => void;
   mode: Mode;
@@ -109,7 +109,7 @@ export default function SettingsModal({
         </div>
       </div>
 
-      {isAdmin && (
+      {canSaveDefault && (
         <div className="border-t border-line pt-4">
           <button
             onClick={() => update.mutate({ default_goals_to_win: goalsToWin })}
@@ -118,7 +118,7 @@ export default function SettingsModal({
           >
             {update.isPending
               ? 'Speichert…'
-              : `Admin: ${goalsToWin} als Server-Standard speichern`}
+              : `${goalsToWin} als Standard speichern`}
           </button>
         </div>
       )}
