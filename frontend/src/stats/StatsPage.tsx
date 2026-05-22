@@ -330,7 +330,7 @@ function ProgressionChart({
     if (ends.length === 0) return offsets;
     const range = ends[0].value - ends[ends.length - 1].value || 100;
     const clusterGap = Math.max(15, range * 0.08);
-    const STEP = 22;
+    const STEP = 12;
     let i = 0;
     while (i < ends.length) {
       let j = i;
@@ -351,7 +351,18 @@ function ProgressionChart({
 
   const lastIdx = data.length - 1;
   const maxOffset = Math.max(0, ...xOffsetByUserId.values());
-  const rightMargin = 32 + maxOffset;
+  const rightMargin = 18 + maxOffset;
+
+  // Sort so higher-rated players render last (on top in SVG paint order)
+  const sortedPlayers = useMemo(() => {
+    if (data.length === 0) return activePlayers;
+    const last = data[data.length - 1];
+    return [...activePlayers].sort((a, b) => {
+      const ra = (last[String(a.id)] as number | null) ?? 0;
+      const rb = (last[String(b.id)] as number | null) ?? 0;
+      return ra - rb;
+    });
+  }, [data, activePlayers]);
 
   return (
     <div>
@@ -385,7 +396,7 @@ function ProgressionChart({
                 return [Math.round(Number(value)), p?.name ?? name];
               }}
             />
-            {activePlayers.map((p) => {
+            {sortedPlayers.map((p) => {
               const color = colorByUserId.get(p.id) ?? '#888';
               const xOffset = xOffsetByUserId.get(p.id) ?? 0;
               return (

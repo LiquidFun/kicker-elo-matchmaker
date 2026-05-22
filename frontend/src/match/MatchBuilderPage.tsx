@@ -299,9 +299,16 @@ export default function MatchBuilderPage() {
   // a player to a specific slot is an explicit role assignment — leave it.
   const lastInteractionRef = useRef<'tap' | 'drag'>('tap');
   const lastAutoBalancedIds = useRef<string>('');
+  // Reset stale mutation state when (re-)mounting so a previous in-flight or
+  // failed balance call doesn't leave the button stuck on "…".
+  useEffect(() => {
+    balance.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (mode !== 'doubles' || !complete) return;
     if (lastInteractionRef.current !== 'tap') return;
+    if (balance.isPending) return;
     const ids = slotsForMode('doubles')
       .map((k) => slots[k])
       .filter((v): v is number => v != null)
@@ -312,7 +319,7 @@ export default function MatchBuilderPage() {
     lastAutoBalancedIds.current = ids;
     onBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complete, mode, slots]);
+  }, [complete, mode, slots, balance.isPending]);
 
   // Score preview & commit ----------------------------------------------------
   const players: MatchPlayerInput[] = useMemo(
@@ -810,18 +817,17 @@ function TeamColumn({
   return (
     <div className="relative flex flex-1 flex-col gap-2">
       <div
-        className={`mx-auto flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] tabular-nums shadow-sm ring-1 ring-line ${
-          teamRating == null ? 'bg-surface text-ink2' : 'bg-surface text-ink'
+        className={`mx-auto flex w-fit items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] tabular-nums shadow-sm ${
+          isWinner
+            ? 'bg-pitch text-white ring-2 ring-pitch'
+            : teamRating == null
+              ? 'bg-surface text-ink2 ring-1 ring-line'
+              : 'bg-surface text-ink ring-1 ring-line'
         }`}
       >
         {hasBall && <BallIcon />}
         <span>Ø {teamRating == null ? '—' : Math.round(teamRating)}</span>
       </div>
-      {isWinner && (
-        <div className="absolute right-1 top-1 z-10 rounded-full bg-pitch px-2 py-0.5 text-[10px] font-bold text-white">
-          GEWINNT
-        </div>
-      )}
       {keys.map((key) => (
         <div key={key} className="flex flex-1 items-stretch">
           <Slot

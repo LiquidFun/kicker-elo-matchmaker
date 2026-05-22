@@ -115,7 +115,7 @@ export default function Slot({
         </div>
       )}
       {showSwap && (
-        <span className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 rounded-md bg-accent px-2 py-0.5 text-center text-xs font-bold uppercase tracking-wider text-white shadow">
+        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-accent px-2 py-0.5 text-center text-xs font-bold uppercase tracking-wider text-white shadow">
           Swap
         </span>
       )}
