@@ -47,9 +47,7 @@ def migrate(db_path: Path) -> None:
                 created_at DATETIME NOT NULL DEFAULT (datetime('now'))
             )
         """)
-        con.execute(
-            "INSERT INTO organizations (id, name) VALUES (1, 'Default')"
-        )
+        con.execute("INSERT INTO organizations (id, name) VALUES (1, 'Default')")
         con.commit()
         print("  inserted Default organization (id=1)")
     else:

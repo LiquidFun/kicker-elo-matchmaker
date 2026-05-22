@@ -73,9 +73,7 @@ def delete_organization(
     if org is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
     if org_id == 1:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Cannot delete the Default organization"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete the Default organization")
     user_count = (
         db.query(models.User)
         .filter(models.User.organization_id == org_id, models.User.deleted_at.is_(None))

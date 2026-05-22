@@ -52,9 +52,7 @@ class User(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
-    __table_args__ = (
-        CheckConstraint("role IN ('admin', 'moderator', 'user')", name="role_valid"),
-    )
+    __table_args__ = (CheckConstraint("role IN ('admin', 'moderator', 'user')", name="role_valid"),)
 
 
 class Session(Base):
