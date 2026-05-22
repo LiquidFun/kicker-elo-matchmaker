@@ -119,7 +119,14 @@ export default function MatchBuilderPage() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [goalsToWin, setGoalsToWin] = useState<number | null>(null);
+  const [goalsToWin, setGoalsToWinRaw] = useState<number | null>(() => {
+    const stored = localStorage.getItem('kicker_goals_to_win');
+    return stored ? Number(stored) : null;
+  });
+  function setGoalsToWin(n: number) {
+    setGoalsToWinRaw(n);
+    localStorage.setItem('kicker_goals_to_win', String(n));
+  }
   const [loserTeam, setLoserTeam] = useState<1 | 2 | null>(null);
   const [loserScore, setLoserScore] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

@@ -155,7 +155,7 @@ function gamesFor(u: User, key: SortKey): number {
   return u.games_singles;
 }
 
-const GRID = 'grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3';
+const GRID = 'grid grid-cols-[1fr_auto_auto_auto_1px_auto] items-center gap-x-1';
 
 function Leaderboard({
   players,
@@ -199,8 +199,9 @@ function Leaderboard({
         <div className={`${GRID} border-b border-line bg-paper px-3 py-2 text-[10px] uppercase tracking-wider text-ink2`}>
           <div>Spieler</div>
           <SortHeader label="Doppel" col="doppel" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
-          <SortHeader label="Sturm" col="attacker" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
-          <SortHeader label="Abwehr" col="defender" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
+          <SortHeader label="Sturm" col="attacker" sortBy={sortBy} sortDir={sortDir} onClick={toggle} small />
+          <SortHeader label="Abwehr" col="defender" sortBy={sortBy} sortDir={sortDir} onClick={toggle} small />
+          <div className="mx-1 h-4 w-px bg-line" />
           <SortHeader label="Einzel" col="singles" sortBy={sortBy} sortDir={sortDir} onClick={toggle} />
         </div>
         {sorted.map((u) => {
@@ -224,8 +225,9 @@ function Leaderboard({
                 rating={(u.rating_attacker + u.rating_defender) / 2}
                 games={u.games_attacker + u.games_defender}
               />
-              <RatingCell rating={u.rating_attacker} games={u.games_attacker} />
-              <RatingCell rating={u.rating_defender} games={u.games_defender} />
+              <RatingCell rating={u.rating_attacker} games={u.games_attacker} small />
+              <RatingCell rating={u.rating_defender} games={u.games_defender} small />
+              <div className="mx-1 h-4 w-px bg-line" />
               <RatingCell rating={u.rating_singles} games={u.games_singles} />
             </Link>
           );
@@ -241,19 +243,21 @@ function SortHeader({
   sortBy,
   sortDir,
   onClick,
+  small,
 }: {
   label: string;
   col: SortKey;
   sortBy: SortKey;
   sortDir: SortDir;
   onClick: (k: SortKey) => void;
+  small?: boolean;
 }) {
   const active = sortBy === col;
   return (
     <button
       type="button"
       onClick={() => onClick(col)}
-      className={`w-12 text-right uppercase tracking-wider ${
+      className={`text-right uppercase tracking-wider ${small ? 'w-10 text-[8px]' : 'w-12'} ${
         active ? 'font-semibold text-pitch' : 'text-ink2'
       }`}
     >
@@ -263,10 +267,10 @@ function SortHeader({
   );
 }
 
-function RatingCell({ rating, games }: { rating: number; games: number }) {
+function RatingCell({ rating, games, small }: { rating: number; games: number; small?: boolean }) {
   return (
     <div
-      className={`w-12 text-right tabular-nums ${
+      className={`text-right tabular-nums ${small ? 'w-10 text-[11px] opacity-60' : 'w-12'} ${
         games > 0 ? 'font-semibold text-ink' : 'text-ink2'
       }`}
     >
@@ -284,17 +288,41 @@ function ModePicker({
 }) {
   return (
     <div className="flex rounded-full bg-surface p-0.5 text-xs ring-1 ring-line">
-      {MODE_TABS.map((t) => (
+      <span className="flex items-center rounded-full ring-1 ring-ink2/20">
         <button
-          key={t.mode}
-          onClick={() => onChange(t.mode)}
+          onClick={() => onChange('doubles')}
           className={`rounded-full px-3 py-1 ${
-            mode === t.mode ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+            mode === 'doubles' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
           }`}
         >
-          {t.label}
+          Doppel
         </button>
-      ))}
+        <span className="mx-0.5 h-3 w-px bg-line" />
+        <button
+          onClick={() => onChange('attacker')}
+          className={`rounded-full px-2 py-1 text-[10px] ${
+            mode === 'attacker' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+          }`}
+        >
+          Sturm
+        </button>
+        <button
+          onClick={() => onChange('defender')}
+          className={`rounded-full px-2 py-1 text-[10px] ${
+            mode === 'defender' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+          }`}
+        >
+          Abwehr
+        </button>
+      </span>
+      <button
+        onClick={() => onChange('singles')}
+        className={`rounded-full px-3 py-1 ${
+          mode === 'singles' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+        }`}
+      >
+        Einzel
+      </button>
     </div>
   );
 }

@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import { useSettings, useUpdateSettings } from '../api/hooks';
 import type { Mode } from '../api/types';
 import Modal from '../components/Modal';
@@ -22,12 +20,13 @@ export default function SettingsModal({
   mode: Mode;
   setMode: (m: Mode) => void;
 }) {
-  const [local, setLocal] = useState(goalsToWin);
   const settingsQ = useSettings();
   const update = useUpdateSettings();
   const [theme, setTheme] = useTheme();
 
-  useEffect(() => setLocal(goalsToWin), [goalsToWin, open]);
+  function adjust(delta: number) {
+    setGoalsToWin(Math.max(1, Math.min(99, goalsToWin + delta)));
+  }
 
   return (
     <Modal open={open} onClose={onClose} title="Spieleinstellungen">
@@ -55,13 +54,13 @@ export default function SettingsModal({
         </div>
       </div>
 
-      <label className="block">
+      <div className="mb-4">
         <span className="mb-1 block text-sm text-ink2">Tore zum Sieg</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center gap-3">
           <button
             type="button"
-            onClick={() => setLocal((v) => Math.max(1, v - 1))}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl"
+            onClick={() => adjust(-1)}
+            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
             aria-label="Verringern"
           >
             −
@@ -71,22 +70,22 @@ export default function SettingsModal({
             inputMode="numeric"
             min={1}
             max={99}
-            value={local}
-            onChange={(e) => setLocal(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+            value={goalsToWin}
+            onChange={(e) => setGoalsToWin(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
             className="h-10 w-20 rounded-lg bg-paper text-center text-xl outline-none ring-1 ring-line focus:ring-rail"
           />
           <button
             type="button"
-            onClick={() => setLocal((v) => Math.min(99, v + 1))}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl"
+            onClick={() => adjust(1)}
+            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
             aria-label="Erhöhen"
           >
             +
           </button>
         </div>
-      </label>
+      </div>
 
-      <div className="mt-4">
+      <div className="mb-4">
         <span className="mb-1 block text-sm text-ink2">Erscheinungsbild</span>
         <div className="flex rounded-lg bg-paper p-0.5 ring-1 ring-line">
           <button
@@ -110,29 +109,16 @@ export default function SettingsModal({
         </div>
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <button
-          onClick={() => {
-            setGoalsToWin(local);
-            onClose();
-          }}
-          className="flex-1 rounded-lg bg-pitch py-2 font-semibold text-white"
-        >
-          Für dieses Spiel
-        </button>
-      </div>
-
       {isAdmin && (
-        <div className="mt-4 border-t border-line pt-4">
-          <p className="mb-2 text-xs text-ink2">
-            Standard für neue Spiele: {settingsQ.data?.default_goals_to_win ?? '…'}
-          </p>
+        <div className="border-t border-line pt-4">
           <button
-            onClick={() => update.mutate({ default_goals_to_win: local })}
-            disabled={update.isPending || settingsQ.data?.default_goals_to_win === local}
+            onClick={() => update.mutate({ default_goals_to_win: goalsToWin })}
+            disabled={update.isPending || settingsQ.data?.default_goals_to_win === goalsToWin}
             className="w-full rounded-lg bg-paper py-2 text-sm ring-1 ring-line disabled:opacity-50"
           >
-            {update.isPending ? 'Speichert…' : 'Als Standard speichern'}
+            {update.isPending
+              ? 'Speichert…'
+              : `Admin: ${goalsToWin} als Server-Standard speichern`}
           </button>
         </div>
       )}
