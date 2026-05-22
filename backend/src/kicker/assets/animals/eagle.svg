@@ -8,6 +8,9 @@
   <path d="M22 30 Q32 26 42 30 L42 36 Q32 40 22 36 Z" fill="#e2e8f0"/>
   <polygon points="28,34 36,34 32,52" fill="#f59e0b"/>
   <polygon points="29,40 35,40 32,44" fill="#b45309"/>
+  <circle cx="27" cy="26" r="3" fill="#fde68a"/>
+  <circle cx="27" cy="26" r="1.5" fill="#18181b"/>
+  <circle cx="26.5" cy="25.5" r="0.5" fill="#fef3c7"/>
   <circle cx="37" cy="26" r="3" fill="#fde68a"/>
   <circle cx="37" cy="26" r="1.5" fill="#18181b"/>
   <circle cx="37.5" cy="25.5" r="0.5" fill="#fef3c7"/>

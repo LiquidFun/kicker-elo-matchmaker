@@ -23,7 +23,7 @@ import {
 import type { MatchPlayerInput, Mode, User } from '../api/types';
 import Modal from '../components/Modal';
 import RosterTile from './RosterTile';
-import SessionHistory from './SessionHistory';
+import SessionHistory, { latestSession } from './SessionHistory';
 import SettingsModal from './SettingsModal';
 import Slot from './Slot';
 import { isOptimalDoublesLineup, teamRating, winProbTeam1 } from './elo';
@@ -123,7 +123,6 @@ export default function MatchBuilderPage() {
   const [loserTeam, setLoserTeam] = useState<1 | 2 | null>(null);
   const [loserScore, setLoserScore] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [sessionStart] = useState(() => new Date().toISOString());
   const [armed, setArmed] = useState<SlotKey | null>(null);
 
   function vibrate(ms: number) {
@@ -132,8 +131,8 @@ export default function MatchBuilderPage() {
 
   const matchesQ = useMatches({ limit: 50 });
   const sessionMatchCount = useMemo(
-    () => (matchesQ.data?.items ?? []).filter((m) => m.created_at >= sessionStart).length,
-    [matchesQ.data, sessionStart],
+    () => latestSession(matchesQ.data?.items ?? []).length,
+    [matchesQ.data],
   );
 
   // Capture the first non-empty match snapshot to derive a stable "recently
@@ -459,7 +458,7 @@ export default function MatchBuilderPage() {
         title="Diese Sitzung"
       >
         <div className="-mx-1 max-h-[70vh] overflow-y-auto">
-          <SessionHistory sessionStart={sessionStart} usersById={usersById} />
+          <SessionHistory usersById={usersById} />
         </div>
       </Modal>
 

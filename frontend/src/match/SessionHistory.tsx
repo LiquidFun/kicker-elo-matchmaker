@@ -1,23 +1,36 @@
 import { useMemo } from 'react';
 
 import { useMatches } from '../api/hooks';
-import type { Position, User } from '../api/types';
+import type { Match, Position, User } from '../api/types';
 import Avatar from './Avatar';
+
+const SESSION_GAP_MS = 60 * 60 * 1000; // 1 hour
+
+export function latestSession(matches: Match[]): Match[] {
+  if (matches.length === 0) return [];
+  // matches are newest-first; walk forward while gap < 1h
+  const session = [matches[0]];
+  for (let i = 1; i < matches.length; i++) {
+    const prev = new Date(matches[i - 1].created_at).getTime();
+    const curr = new Date(matches[i].created_at).getTime();
+    if (Math.abs(prev - curr) > SESSION_GAP_MS) break;
+    session.push(matches[i]);
+  }
+  return session;
+}
 
 type PositionTotals = Partial<Record<Position, number>>;
 
 export default function SessionHistory({
-  sessionStart,
   usersById,
 }: {
-  sessionStart: string;
   usersById: Record<number, User>;
 }) {
   const matchesQ = useMatches({ limit: 50 });
 
   const sessionMatches = useMemo(
-    () => (matchesQ.data?.items ?? []).filter((m) => m.created_at >= sessionStart),
-    [matchesQ.data, sessionStart],
+    () => latestSession(matchesQ.data?.items ?? []),
+    [matchesQ.data],
   );
 
   const totalsByUser = useMemo(() => {
