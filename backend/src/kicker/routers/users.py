@@ -40,7 +40,12 @@ _AVATAR_MAX_PX = 256
 def _resize_avatar(data: bytes) -> bytes:
     """Resize to at most 256x256, center-crop to square, and encode as WebP."""
     img = Image.open(io.BytesIO(data))
-    img = img.convert("RGBA") if img.mode == "RGBA" else img.convert("RGB")
+    if img.mode == "RGBA":
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        img = bg
+    else:
+        img = img.convert("RGB")
     # Center-crop to square
     w, h = img.size
     side = min(w, h)

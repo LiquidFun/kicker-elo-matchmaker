@@ -2,9 +2,8 @@ import { useMemo } from 'react';
 
 import { useMatches } from '../api/hooks';
 import type { Match, Position, User } from '../api/types';
+import { SESSION_GAP_MS } from '../utils/session';
 import Avatar from './Avatar';
-
-const SESSION_GAP_MS = 60 * 60 * 1000; // 1 hour
 
 export function latestSession(matches: Match[]): Match[] {
   if (matches.length === 0) return [];

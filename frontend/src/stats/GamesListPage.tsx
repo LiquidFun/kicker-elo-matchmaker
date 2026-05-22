@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useDeleteMatch, useMatches, useMe, useUsers } from '../api/hooks';
 import type { Match, MatchList, MatchPlayer, Mode, User } from '../api/types';
 import Avatar from '../match/Avatar';
+import { SESSION_GAP_MS } from '../utils/session';
 
 const PAGE_SIZE = 50;
 
@@ -43,7 +44,7 @@ export default function GamesListPage() {
   const deleteMatch = useDeleteMatch();
 
   async function downloadAllMatches() {
-    const data = await api.get<MatchList>(`/api/matches?limit=${total || 10000}&offset=0`);
+    const data = await api.get<MatchList>('/api/matches?limit=100000&offset=0');
     const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -174,8 +175,6 @@ function PagerButton({
     </button>
   );
 }
-
-const SESSION_GAP_MS = 60 * 60 * 1000; // 1 hour
 
 function groupIntoSessions(matches: Match[]): Match[][] {
   if (matches.length === 0) return [];

@@ -15,6 +15,7 @@ import type { Position, User } from '../api/types';
 import EditUserDialog from '../admin/EditUserDialog';
 import Avatar from '../match/Avatar';
 import { cssVar, useTheme } from '../theme';
+import { formatShortDate } from '../utils/date';
 
 const posColors = (): Record<Position, string> => ({
   attacker: cssVar('accent'),
@@ -27,13 +28,6 @@ const POS_LABEL: Record<Position, string> = {
   defender: 'Abwehr',
   singles: 'Einzel',
 };
-
-function formatShortDate(iso?: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-}
 
 export default function UserProfilePage() {
   const { userId } = useParams();

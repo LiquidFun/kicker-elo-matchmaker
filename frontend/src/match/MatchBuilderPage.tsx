@@ -120,8 +120,8 @@ export default function MatchBuilderPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsToWin, setGoalsToWinRaw] = useState<number | null>(() => {
-    const stored = localStorage.getItem('kicker_goals_to_win');
-    return stored ? Number(stored) : null;
+    const n = Number(localStorage.getItem('kicker_goals_to_win'));
+    return Number.isFinite(n) && n >= 1 ? n : null;
   });
   function setGoalsToWin(n: number) {
     setGoalsToWinRaw(n);

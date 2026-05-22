@@ -14,26 +14,13 @@ import { useGlobalStats, useMatches, useUsers } from '../api/hooks';
 import type { LeaderboardMode, Match, User } from '../api/types';
 import Avatar from '../match/Avatar';
 import { cssVar, useTheme } from '../theme';
+import { formatShortDate } from '../utils/date';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-function formatShortDate(iso?: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-}
-
-const MODE_TABS: { mode: LeaderboardMode; label: string }[] = [
-  { mode: 'doubles', label: 'Doppel' },
-  { mode: 'attacker', label: 'Sturm' },
-  { mode: 'defender', label: 'Abwehr' },
-  { mode: 'singles', label: 'Einzel' },
-];
 
 // Warm/earth palette — only shades of green, orange, beige, brown. No blues.
 const LINE_COLORS_LIGHT = [
@@ -369,6 +356,17 @@ function ProgressionChart({
     return offsets;
   }, [data, activePlayers]);
 
+  // Sort so higher-rated players render last (on top in SVG paint order)
+  const sortedPlayers = useMemo(() => {
+    if (data.length === 0) return activePlayers;
+    const last = data[data.length - 1];
+    return [...activePlayers].sort((a, b) => {
+      const ra = (last[String(a.id)] as number | null) ?? 0;
+      const rb = (last[String(b.id)] as number | null) ?? 0;
+      return ra - rb;
+    });
+  }, [data, activePlayers]);
+
   if (activePlayers.length === 0) {
     return (
       <div className="flex h-52 items-center justify-center rounded-xl bg-surface text-sm text-ink2 ring-1 ring-line">
@@ -380,17 +378,6 @@ function ProgressionChart({
   const lastIdx = data.length - 1;
   const maxOffset = Math.max(0, ...xOffsetByUserId.values());
   const rightMargin = 18 + maxOffset;
-
-  // Sort so higher-rated players render last (on top in SVG paint order)
-  const sortedPlayers = useMemo(() => {
-    if (data.length === 0) return activePlayers;
-    const last = data[data.length - 1];
-    return [...activePlayers].sort((a, b) => {
-      const ra = (last[String(a.id)] as number | null) ?? 0;
-      const rb = (last[String(b.id)] as number | null) ?? 0;
-      return ra - rb;
-    });
-  }, [data, activePlayers]);
 
   return (
     <div>
