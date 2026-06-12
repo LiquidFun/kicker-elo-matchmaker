@@ -1,7 +1,26 @@
 import { Link } from 'react-router-dom';
 
-import type { Match, MatchPlayer, User } from '../api/types';
+import type { Match, MatchPlayer, Position, User } from '../api/types';
 import Avatar from './Avatar';
+
+const POS_ABBR: Record<Position, string> = {
+  attacker: 'S',
+  defender: 'A',
+  singles: '',
+};
+
+// Match pitch layout: Team1 has A on top / S on bottom,
+// Team2 has S on top / A on bottom (mirrored positions).
+function pitchOrder(pos: Position, team: 1 | 2): number {
+  if (pos === 'singles') return 0;
+  if (team === 1) return pos === 'defender' ? 0 : 1;
+  return pos === 'attacker' ? 0 : 1;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function MatchCard({
   match,
@@ -16,14 +35,25 @@ export default function MatchCard({
   onDelete?: () => void;
   className?: string;
 }) {
-  const team1 = match.players.filter((p) => p.team === 1);
-  const team2 = match.players.filter((p) => p.team === 2);
+  const team1 = match.players
+    .filter((p) => p.team === 1)
+    .sort((a, b) => pitchOrder(a.position, 1) - pitchOrder(b.position, 1));
+  const team2 = match.players
+    .filter((p) => p.team === 2)
+    .sort((a, b) => pitchOrder(a.position, 2) - pitchOrder(b.position, 2));
+  const displayDate = date ?? formatTime(match.created_at);
+
   return (
-    <div className={`rounded-xl bg-paper p-3 ring-1 ring-line ${className ?? ''}`}>
+    <div className={`relative rounded-xl bg-paper p-3 ring-1 ring-line ${className ?? ''}`}>
+      <div
+        className={`absolute bottom-2 top-2 w-1 rounded-full bg-pitch ${
+          match.winner_team === 1 ? 'left-1.5' : 'right-1.5'
+        }`}
+      />
       <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-ink2">
         <span>{match.mode === 'doubles' ? 'Doppel' : 'Einzel'}</span>
         <span className="flex items-center gap-2">
-          {date && <span>{date}</span>}
+          <span>{displayDate}</span>
           {onDelete && (
             <button
               type="button"
@@ -44,8 +74,14 @@ export default function MatchCard({
           align="right"
           isWinner={match.winner_team === 1}
         />
-        <div className="text-xl font-bold tabular-nums">
-          {match.team1_score} : {match.team2_score}
+        <div className="flex items-center gap-1 text-xl font-bold tabular-nums">
+          <span className={match.winner_team === 1 ? 'text-pitch' : 'text-ink2'}>
+            {match.team1_score}
+          </span>
+          <span className="text-ink2/40">:</span>
+          <span className={match.winner_team === 2 ? 'text-pitch' : 'text-ink2'}>
+            {match.team2_score}
+          </span>
         </div>
         <TeamLine
           players={team2}
@@ -83,6 +119,7 @@ function TeamLine({
           );
         }
         const delta = p.rating_delta;
+        const posLabel = POS_ABBR[p.position];
         return (
           <Link
             to={`/stats/users/${u.id}`}
@@ -97,6 +134,9 @@ function TeamLine({
             >
               {u.name}
             </span>
+            {posLabel && (
+              <span className="shrink-0 text-[10px] font-semibold text-pitch">{posLabel}</span>
+            )}
             <span
               className={`shrink-0 text-[11px] tabular-nums font-medium ${
                 delta >= 0 ? 'text-pitch' : 'text-accent'

@@ -20,8 +20,9 @@ import {
   useSettings,
   useUsers,
 } from '../api/hooks';
-import type { MatchPlayerInput, Mode, User } from '../api/types';
+import type { Lineup, MatchPlayerInput, Mode, User } from '../api/types';
 import Modal from '../components/Modal';
+import Avatar from './Avatar';
 import RosterTile from './RosterTile';
 import SessionHistory, { latestSession } from './SessionHistory';
 import SettingsModal from './SettingsModal';
@@ -117,6 +118,7 @@ export default function MatchBuilderPage() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [allLineupsOpen, setAllLineupsOpen] = useState(false);
   const [goalsToWin, setGoalsToWinRaw] = useState<number | null>(() => {
     const n = Number(localStorage.getItem('kicker_goals_to_win'));
     return Number.isFinite(n) && n >= 1 ? n : null;
@@ -258,6 +260,27 @@ export default function MatchBuilderPage() {
         },
       },
     );
+  }
+
+  function onBalanceLongPress() {
+    const ids = slotsForMode('doubles')
+      .map((k) => slots[k])
+      .filter((v): v is number => v != null);
+    if (ids.length !== 4) return;
+    balance.mutate(
+      { player_ids: ids },
+      { onSuccess: () => setAllLineupsOpen(true) },
+    );
+  }
+
+  function selectLineup(lu: Lineup) {
+    setLineup({
+      'team1.attacker': lu.team1_attacker,
+      'team1.defender': lu.team1_defender,
+      'team2.attacker': lu.team2_attacker,
+      'team2.defender': lu.team2_defender,
+    });
+    setAllLineupsOpen(false);
   }
 
   const sortedUsers = useMemo(() => {
@@ -428,6 +451,7 @@ export default function MatchBuilderPage() {
           }
           isBalancing={balance.isPending}
           onBalance={onBalance}
+          onBalanceLongPress={onBalanceLongPress}
           onOpenSettings={() => setSettingsOpen(true)}
           onSpeak={onSpeak}
           canSpeak={complete}
@@ -483,6 +507,18 @@ export default function MatchBuilderPage() {
         mode={mode}
         setMode={setMode}
       />
+
+      <AllLineupsModal
+        open={allLineupsOpen}
+        onClose={() => setAllLineupsOpen(false)}
+        lineups={
+          balance.data
+            ? [balance.data.best, ...balance.data.alternatives]
+            : []
+        }
+        usersById={usersById}
+        onSelect={selectLineup}
+      />
     </div>
     </DndContext>
   );
@@ -506,6 +542,7 @@ function Pitch({
   canBalance,
   isBalancing,
   onBalance,
+  onBalanceLongPress,
   onOpenSettings,
   onSpeak,
   canSpeak,
@@ -537,6 +574,7 @@ function Pitch({
   canBalance: boolean;
   isBalancing: boolean;
   onBalance: () => void;
+  onBalanceLongPress: () => void;
   onOpenSettings: () => void;
   onSpeak: () => void;
   canSpeak: boolean;
@@ -591,15 +629,13 @@ function Pitch({
           />
           <div className="flex w-20 shrink-0 flex-col items-center py-8 md:w-32">
             {mode === 'doubles' && (
-              <button
-                onClick={onBalance}
-                disabled={!canBalance || isBalancing}
-                className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg ring-2 transition-colors disabled:cursor-not-allowed md:h-16 md:w-16 ${balanceBg}`}
-                aria-label="Teams ausgleichen"
-                title="Teams ausgleichen"
-              >
-                {isBalancing ? <span className="text-xs font-bold">…</span> : <ScalesIcon />}
-              </button>
+              <BalanceButton
+                canBalance={canBalance}
+                isBalancing={isBalancing}
+                balanceBg={balanceBg}
+                onBalance={onBalance}
+                onLongPress={onBalanceLongPress}
+              />
             )}
             <div className="flex-[2.5]" aria-hidden />
             <button
@@ -924,6 +960,194 @@ function ScoreColumn({
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+const LONG_PRESS_MS = 500;
+const RING_CIRCUMFERENCE = 2 * Math.PI * 26; // r=26 in viewBox 56x56
+
+function BalanceButton({
+  canBalance,
+  isBalancing,
+  balanceBg,
+  onBalance,
+  onLongPress,
+}: {
+  canBalance: boolean;
+  isBalancing: boolean;
+  balanceBg: string;
+  onBalance: () => void;
+  onLongPress: () => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPressRef = useRef(false);
+  const [pressing, setPressing] = useState(false);
+
+  function vibrate(ms: number) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
+  }
+
+  function clearTimer() {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setPressing(false);
+  }
+
+  return (
+    <button
+      disabled={!canBalance || isBalancing}
+      className={`relative flex h-12 w-12 items-center justify-center rounded-full shadow-lg ring-2 disabled:cursor-not-allowed md:h-16 md:w-16 ${balanceBg} transition-transform duration-200 ${
+        pressing ? 'scale-125' : ''
+      }`}
+      aria-label="Teams ausgleichen"
+      title="Teams ausgleichen (lang drücken für alle)"
+      onPointerDown={() => {
+        if (!canBalance || isBalancing) return;
+        didLongPressRef.current = false;
+        setPressing(true);
+        vibrate(10);
+        timerRef.current = setTimeout(() => {
+          didLongPressRef.current = true;
+          timerRef.current = null;
+          vibrate(30);
+          onLongPress();
+          setPressing(false);
+        }, LONG_PRESS_MS);
+      }}
+      onPointerUp={clearTimer}
+      onPointerCancel={clearTimer}
+      onPointerLeave={clearTimer}
+      onClick={(e) => {
+        if (didLongPressRef.current) {
+          e.preventDefault();
+          return;
+        }
+        onBalance();
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Progress ring — fills clockwise over LONG_PRESS_MS */}
+      <svg
+        className="pointer-events-none absolute -inset-1 -rotate-90"
+        viewBox="0 0 56 56"
+      >
+        <circle
+          cx="28"
+          cy="28"
+          r="26"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          strokeLinecap="round"
+          className="text-white"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={pressing ? 0 : RING_CIRCUMFERENCE}
+          style={{
+            transition: pressing
+              ? `stroke-dashoffset ${LONG_PRESS_MS}ms linear`
+              : 'none',
+          }}
+        />
+      </svg>
+      {isBalancing ? <span className="text-xs font-bold">…</span> : <ScalesIcon />}
+    </button>
+  );
+}
+
+function AllLineupsModal({
+  open,
+  onClose,
+  lineups,
+  usersById,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lineups: Lineup[];
+  usersById: Record<number, User>;
+  onSelect: (lu: Lineup) => void;
+}) {
+  function player(id: number) {
+    return usersById[id] ?? null;
+  }
+
+  function teamRatingForLineup(lu: Lineup, team: 1 | 2): number {
+    const att = player(team === 1 ? lu.team1_attacker : lu.team2_attacker);
+    const def = player(team === 1 ? lu.team1_defender : lu.team2_defender);
+    return ((att?.rating_attacker ?? 0) + (def?.rating_defender ?? 0)) / 2;
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Alle Aufstellungen">
+      <ul className="-mx-1 max-h-[70vh] space-y-1 overflow-y-auto">
+        {lineups.map((lu, i) => {
+          const r1 = teamRatingForLineup(lu, 1);
+          const r2 = teamRatingForLineup(lu, 2);
+          const diff = Math.round(r1 - r2);
+          const absDiff = Math.abs(diff);
+          const t1att = player(lu.team1_attacker);
+          const t1def = player(lu.team1_defender);
+          const t2att = player(lu.team2_attacker);
+          const t2def = player(lu.team2_defender);
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onSelect(lu)}
+                className={`w-full rounded-xl bg-paper p-2.5 text-left ring-1 transition-colors active:bg-surface ${
+                  i === 0 ? 'ring-pitch/40' : 'ring-line hover:bg-surface'
+                }`}
+              >
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    <PlayerRow user={t1def} pos="A" align="right" />
+                    <PlayerRow user={t1att} pos="S" align="right" />
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`text-xs font-bold tabular-nums ${
+                        absDiff < 30 ? 'text-pitch' : 'text-accent'
+                      }`}
+                    >
+                      {diff > 0 ? `◀ ${absDiff}` : diff < 0 ? `${absDiff} ▶` : `= ${absDiff}`}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <PlayerRow user={t2att} pos="S" align="left" />
+                    <PlayerRow user={t2def} pos="A" align="left" />
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Modal>
+  );
+}
+
+function PlayerRow({
+  user,
+  pos,
+  align,
+}: {
+  user: User | null;
+  pos: 'S' | 'A';
+  align: 'left' | 'right';
+}) {
+  if (!user) return <div className="text-sm text-ink2">?</div>;
+  const rating = Math.round(pos === 'S' ? user.rating_attacker : user.rating_defender);
+  return (
+    <div
+      className={`flex items-center gap-1.5 ${align === 'right' ? 'flex-row-reverse' : ''}`}
+    >
+      <Avatar user={user} size="sm" />
+      <span className="min-w-0 truncate text-sm font-medium">{user.name}</span>
+      <span className="shrink-0 text-[10px] font-semibold text-pitch">{pos}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-ink2">{rating}</span>
     </div>
   );
 }

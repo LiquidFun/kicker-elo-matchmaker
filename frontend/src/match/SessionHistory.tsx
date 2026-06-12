@@ -57,12 +57,11 @@ export default function SessionHistory({
     <div className="space-y-3 px-1">
       <SessionTotals totals={totalsByUser} usersById={usersById} />
       <ul className="space-y-2">
-        {sessionMatches.map((m, idx) => (
+        {sessionMatches.map((m) => (
           <li key={m.id}>
             <MatchCard
               match={m}
               usersById={usersById}
-              className={idx === 0 ? 'opacity-60' : ''}
             />
           </li>
         ))}
