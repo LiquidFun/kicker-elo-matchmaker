@@ -101,8 +101,8 @@ function SessionTotals({
             <li key={userId} className="flex items-center gap-2 py-1.5">
               <Avatar user={u} size="sm" />
               <span className="flex-1 truncate text-sm text-ink">{u.name}</span>
-              <PositionDelta label="S" value={t.attacker} />
-              <PositionDelta label="A" value={t.defender} />
+              <PositionDelta label="⚔" value={t.attacker} />
+              <PositionDelta label="🛡" value={t.defender} />
               <PositionDelta label="E" value={t.singles} />
             </li>
           );

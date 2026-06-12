@@ -1103,8 +1103,8 @@ function AllLineupsModal({
               >
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <div className="flex flex-col gap-1.5">
-                    <PlayerRow user={t1def} pos="A" align="right" />
-                    <PlayerRow user={t1att} pos="S" align="right" />
+                    <PlayerRow user={t1def} pos="defender" align="right" />
+                    <PlayerRow user={t1att} pos="attacker" align="right" />
                   </div>
                   <div className="flex flex-col items-center">
                     <span
@@ -1116,8 +1116,8 @@ function AllLineupsModal({
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <PlayerRow user={t2att} pos="S" align="left" />
-                    <PlayerRow user={t2def} pos="A" align="left" />
+                    <PlayerRow user={t2att} pos="attacker" align="left" />
+                    <PlayerRow user={t2def} pos="defender" align="left" />
                   </div>
                 </div>
               </button>
@@ -1135,28 +1135,29 @@ function PlayerRow({
   align,
 }: {
   user: User | null;
-  pos: 'S' | 'A';
+  pos: 'attacker' | 'defender';
   align: 'left' | 'right';
 }) {
   if (!user) return <div className="text-sm text-ink2">?</div>;
-  const rating = Math.round(pos === 'S' ? user.rating_attacker : user.rating_defender);
+  const icon = pos === 'attacker' ? '⚔' : '🛡';
+  const rating = Math.round(pos === 'attacker' ? user.rating_attacker : user.rating_defender);
   return (
     <div
       className={`flex items-center gap-1.5 ${align === 'right' ? 'flex-row-reverse' : ''}`}
     >
       <Avatar user={user} size="sm" />
       <span className="min-w-0 truncate text-sm font-medium">{user.name}</span>
-      <span className="shrink-0 text-[10px] font-semibold text-pitch">{pos}</span>
+      <span className="shrink-0 text-[10px]">{icon}</span>
       <span className="shrink-0 text-[11px] tabular-nums text-ink2">{rating}</span>
     </div>
   );
 }
 
 const SLOT_HINT: Record<SlotKey, string> = {
-  'team1.attacker': 'Team 1 Sturm',
-  'team1.defender': 'Team 1 Abwehr',
-  'team2.attacker': 'Team 2 Sturm',
-  'team2.defender': 'Team 2 Abwehr',
+  'team1.attacker': 'Team 1 ⚔',
+  'team1.defender': 'Team 1 🛡',
+  'team2.attacker': 'Team 2 ⚔',
+  'team2.defender': 'Team 2 🛡',
   'team1.singles': 'Team 1',
   'team2.singles': 'Team 2',
 };

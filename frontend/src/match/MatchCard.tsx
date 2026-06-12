@@ -4,8 +4,8 @@ import type { Match, MatchPlayer, Position, User } from '../api/types';
 import Avatar from './Avatar';
 
 const POS_ABBR: Record<Position, string> = {
-  attacker: 'S',
-  defender: 'A',
+  attacker: '⚔',
+  defender: '🛡',
   singles: '',
 };
 

@@ -93,12 +93,12 @@ export default function Slot({
           {mode === 'doubles' ? (
             <div className="flex flex-col items-center gap-0.5 text-[10px] tabular-nums leading-none">
               <RatingPair
-                label="S"
+                label="⚔"
                 value={user.rating_attacker}
                 active={active_ === 'attacker'}
               />
               <RatingPair
-                label="A"
+                label="🛡"
                 value={user.rating_defender}
                 active={active_ === 'defender'}
               />

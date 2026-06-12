@@ -1,7 +1,16 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+
+# SQLite loses timezone info; ensure datetimes are serialized as UTC with 'Z'.
+UTCDatetime = Annotated[
+    datetime,
+    PlainSerializer(
+        lambda dt: dt.replace(tzinfo=None).isoformat() + "Z" if dt.tzinfo else dt.isoformat() + "Z",
+        return_type=str,
+    ),
+]
 
 Mode = Literal["doubles", "singles"]
 Position = Literal["attacker", "defender", "singles"]
@@ -30,7 +39,7 @@ class UserOut(BaseModel):
     games_attacker: int
     games_defender: int
     games_singles: int
-    created_at: datetime
+    created_at: UTCDatetime
 
     @classmethod
     def from_user(cls, user) -> "UserOut":
@@ -135,7 +144,7 @@ class MatchOut(BaseModel):
     team1_score: int
     team2_score: int
     winner_team: int
-    created_at: datetime
+    created_at: UTCDatetime
     created_by_user_id: int | None
     players: list[MatchPlayerOut]
 
