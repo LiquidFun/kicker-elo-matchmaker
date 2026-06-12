@@ -117,10 +117,11 @@ function Stat({ label, value, to }: { label: string; value: number; to: string }
   return (
     <Link
       to={to}
-      className="rounded-lg bg-surface px-2 py-2 ring-1 ring-line active:bg-paper"
+      className="group relative rounded-lg bg-surface px-2 py-2 ring-1 ring-line transition-colors hover:bg-paper active:bg-paper"
     >
       <div className="text-lg font-semibold tabular-nums">{value}</div>
       <div className="text-[10px] uppercase tracking-wider text-ink2">{label}</div>
+      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-ink2/40">›</span>
     </Link>
   );
 }

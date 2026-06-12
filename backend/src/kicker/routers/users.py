@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -49,6 +49,7 @@ _AVATAR_MAX_PX = 256
 def _resize_avatar(data: bytes) -> bytes:
     """Resize to at most 256x256, center-crop to square, and encode as WebP."""
     img = Image.open(io.BytesIO(data))
+    img = ImageOps.exif_transpose(img)
     if img.mode == "RGBA":
         bg = Image.new("RGB", img.size, (255, 255, 255))
         bg.paste(img, mask=img.split()[3])
