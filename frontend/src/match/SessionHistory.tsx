@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 
 import { useMatches } from '../api/hooks';
 import type { Match, Position, User } from '../api/types';
-import { SESSION_GAP_MS } from '../utils/session';
 import Avatar from './Avatar';
+import MatchCard from './MatchCard';
+import { SESSION_GAP_MS } from '../utils/session';
 
 export function latestSession(matches: Match[]): Match[] {
   if (matches.length === 0) return [];
@@ -57,35 +58,12 @@ export default function SessionHistory({
       <SessionTotals totals={totalsByUser} usersById={usersById} />
       <ul className="space-y-2">
         {sessionMatches.map((m, idx) => (
-          <li
-            key={m.id}
-            className={`rounded-xl bg-paper p-3 ring-1 ring-line ${
-              idx === 0 ? 'opacity-60' : ''
-            }`}
-          >
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <TeamLine
-                ids={m.players.filter((p) => p.team === 1).map((p) => p.user_id)}
-                usersById={usersById}
-                align="right"
-                isWinner={m.winner_team === 1}
-              />
-              <div className="flex flex-col items-center">
-                <div className="text-xs uppercase tracking-wider text-ink2">
-                  {m.mode === 'doubles' ? 'Doppel' : 'Einzel'}
-                </div>
-                <div className="text-xl font-bold tabular-nums">
-                  {m.team1_score} : {m.team2_score}
-                </div>
-              </div>
-              <TeamLine
-                ids={m.players.filter((p) => p.team === 2).map((p) => p.user_id)}
-                usersById={usersById}
-                align="left"
-                isWinner={m.winner_team === 2}
-              />
-            </div>
-            <DeltaStrip players={m.players} usersById={usersById} />
+          <li key={m.id}>
+            <MatchCard
+              match={m}
+              usersById={usersById}
+              className={idx === 0 ? 'opacity-60' : ''}
+            />
           </li>
         ))}
       </ul>
@@ -124,8 +102,8 @@ function SessionTotals({
             <li key={userId} className="flex items-center gap-2 py-1.5">
               <Avatar user={u} size="sm" />
               <span className="flex-1 truncate text-sm text-ink">{u.name}</span>
-              <PositionDelta label="A" value={t.attacker} />
-              <PositionDelta label="D" value={t.defender} />
+              <PositionDelta label="S" value={t.attacker} />
+              <PositionDelta label="A" value={t.defender} />
               <PositionDelta label="E" value={t.singles} />
             </li>
           );
@@ -147,73 +125,5 @@ function PositionDelta({ label, value }: { label: string; value: number | undefi
         {value.toFixed(1)}
       </span>
     </span>
-  );
-}
-
-function TeamLine({
-  ids,
-  usersById,
-  align,
-  isWinner,
-}: {
-  ids: number[];
-  usersById: Record<number, User>;
-  align: 'left' | 'right';
-  isWinner: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-0 flex-col gap-1 ${align === 'right' ? 'items-end' : 'items-start'}`}
-    >
-      {ids.map((id) => {
-        const u = usersById[id];
-        if (!u) return null;
-        return (
-          <div
-            key={id}
-            className={`flex min-w-0 items-center gap-1 ${
-              align === 'right' ? 'flex-row-reverse' : ''
-            }`}
-          >
-            <Avatar user={u} size="sm" />
-            <span
-              className={`truncate text-sm ${isWinner ? 'font-semibold text-ink' : 'text-ink2'}`}
-            >
-              {u.name}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function DeltaStrip({
-  players,
-  usersById,
-}: {
-  players: { user_id: number; rating_delta: number; team: number }[];
-  usersById: Record<number, User>;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px]">
-      {players.map((p) => {
-        const u = usersById[p.user_id];
-        if (!u) return null;
-        return (
-          <span key={p.user_id} className="flex items-center gap-1">
-            <span className="text-ink2">{u.name}</span>
-            <span
-              className={`tabular-nums font-semibold ${
-                p.rating_delta >= 0 ? 'text-pitch' : 'text-accent'
-              }`}
-            >
-              {p.rating_delta >= 0 ? '+' : ''}
-              {p.rating_delta.toFixed(1)}
-            </span>
-          </span>
-        );
-      })}
-    </div>
   );
 }

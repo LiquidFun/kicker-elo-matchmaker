@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import { useCanManage, useDeleteMatch, useMatches, useUsers } from '../api/hooks';
-import type { Match, MatchList, MatchPlayer, Mode, User } from '../api/types';
-import Avatar from '../match/Avatar';
+import type { Match, MatchList, Mode, User } from '../api/types';
+import MatchCard from '../match/MatchCard';
 import { SESSION_GAP_MS } from '../utils/session';
 
 const PAGE_SIZE = 50;
@@ -221,109 +221,17 @@ function SessionList({
             </div>
             <ul className={single ? '' : 'space-y-1 border-l-2 border-pitch/30 pl-2'}>
               {session.map((m) => (
-                <MatchRow
-                  key={m.id}
-                  match={m}
-                  usersById={usersById}
-                  onDelete={m.id === deletableId ? () => onDelete(m.id) : undefined}
-                />
+                <li key={m.id}>
+                  <MatchCard
+                    match={m}
+                    usersById={usersById}
+                    date={formatDate(m.created_at)}
+                    onDelete={m.id === deletableId ? () => onDelete(m.id) : undefined}
+                  />
+                </li>
               ))}
             </ul>
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function MatchRow({
-  match,
-  usersById,
-  onDelete,
-}: {
-  match: Match;
-  usersById: Record<number, User>;
-  onDelete?: () => void;
-}) {
-  const team1 = match.players.filter((p) => p.team === 1);
-  const team2 = match.players.filter((p) => p.team === 2);
-  return (
-    <li className="rounded-xl bg-paper p-3 ring-1 ring-line">
-      <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-ink2">
-        <span>{match.mode === 'doubles' ? 'Doppel' : 'Einzel'}</span>
-        <span className="flex items-center gap-2">
-          <span>{formatDate(match.created_at)}</span>
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => { if (confirm('Spiel löschen?')) onDelete(); }}
-              className="rounded px-1 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/10"
-            >
-              ✕
-            </button>
-          )}
-        </span>
-      </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <TeamLine players={team1} usersById={usersById} align="right" isWinner={match.winner_team === 1} />
-        <div className="text-xl font-bold tabular-nums">
-          {match.team1_score} : {match.team2_score}
-        </div>
-        <TeamLine players={team2} usersById={usersById} align="left" isWinner={match.winner_team === 2} />
-      </div>
-    </li>
-  );
-}
-
-function TeamLine({
-  players,
-  usersById,
-  align,
-  isWinner,
-}: {
-  players: MatchPlayer[];
-  usersById: Record<number, User>;
-  align: 'left' | 'right';
-  isWinner: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-0 flex-col gap-1 ${align === 'right' ? 'items-end' : 'items-start'}`}
-    >
-      {players.map((p) => {
-        const u = usersById[p.user_id];
-        if (!u) {
-          return (
-            <div key={p.user_id} className="text-sm text-ink2">
-              #{p.user_id}
-            </div>
-          );
-        }
-        const delta = p.rating_delta;
-        return (
-          <Link
-            to={`/stats/users/${u.id}`}
-            key={p.user_id}
-            className={`flex min-w-0 items-center gap-1.5 ${
-              align === 'right' ? 'flex-row-reverse' : ''
-            }`}
-          >
-            <Avatar user={u} size="sm" />
-            <span
-              className={`truncate text-sm ${
-                isWinner ? 'font-semibold text-ink' : 'text-ink2'
-              }`}
-            >
-              {u.name}
-            </span>
-            <span
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] tabular-nums font-medium ${
-                delta >= 0 ? 'bg-pitch/10 text-pitch' : 'bg-accent/10 text-accent'
-              }`}
-            >
-              {delta >= 0 ? '+' : ''}{delta.toFixed(0)}
-            </span>
-          </Link>
         );
       })}
     </div>
