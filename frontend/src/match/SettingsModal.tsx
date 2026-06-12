@@ -110,15 +110,18 @@ export default function SettingsModal({
       </div>
 
       {canSaveDefault && (
-        <div className="border-t border-line pt-4">
+        <div className="-mx-5 -mb-[calc(env(safe-area-inset-bottom)+1.25rem)] mt-4 rounded-b-2xl bg-accent/10 px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 ring-1 ring-inset ring-accent/20 sm:rounded-b-2xl">
+          <div className="mb-3 text-[10px] font-bold uppercase tracking-wider text-accent">
+            Admin
+          </div>
           <button
             onClick={() => update.mutate({ default_goals_to_win: goalsToWin })}
             disabled={update.isPending || settingsQ.data?.default_goals_to_win === goalsToWin}
-            className="w-full rounded-lg bg-paper py-2 text-sm ring-1 ring-line disabled:opacity-50"
+            className="w-full rounded-lg bg-accent py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {update.isPending
               ? 'Speichert…'
-              : `${goalsToWin} als Standard speichern`}
+              : `${goalsToWin} als Standard speichern für Organisation`}
           </button>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -36,8 +36,6 @@ const LINE_COLORS_LIGHT = [
   '#a8946c', // tan
 ];
 
-// Dark-mode siblings: the two darkest hues (#1a3d2e, #5b3a1f) are replaced with
-// lighter variants so all lines stay visible against the dark surface.
 const LINE_COLORS_DARK = [
   '#4ade80', // brighter green
   '#f59e0b', // accent orange
@@ -56,6 +54,8 @@ export default function StatsPage() {
   const matchesQ = useMatches({ limit: 200 });
   const globalQ = useGlobalStats();
   const [chartMode, setChartMode] = useState<LeaderboardMode>('doubles');
+  const [chartFullscreen, setChartFullscreen] = useState(false);
+  const [highlightedPlayer, setHighlightedPlayer] = useState<number | null>(null);
   const [theme] = useTheme();
   const LINE_COLORS = theme === 'dark' ? LINE_COLORS_DARK : LINE_COLORS_LIGHT;
 
@@ -83,6 +83,19 @@ export default function StatsPage() {
     return m;
   }, [activeInMode, LINE_COLORS]);
 
+  const toggleHighlight = useCallback((id: number) => {
+    setHighlightedPlayer((prev) => (prev === id ? null : id));
+  }, []);
+
+  const chartProps = {
+    mode: chartMode,
+    activePlayers: activeInMode,
+    matches: matchesQ.data?.items ?? [],
+    colorByUserId,
+    highlightedPlayer,
+    onHighlight: toggleHighlight,
+  };
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
       {globalQ.data && (
@@ -94,22 +107,68 @@ export default function StatsPage() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <Leaderboard players={players} colorByUserId={colorByUserId} />
+        <Leaderboard
+          players={players}
+          colorByUserId={colorByUserId}
+          highlightedPlayer={highlightedPlayer}
+          onHighlight={toggleHighlight}
+        />
       </div>
 
       <div className="shrink-0 border-t border-line bg-paper px-3 pb-3 pt-3">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs uppercase tracking-wider text-ink2">Elo-Verlauf</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs uppercase tracking-wider text-ink2">Elo-Verlauf</h3>
+            <button
+              type="button"
+              onClick={() => setChartFullscreen(true)}
+              className="rounded p-0.5 text-ink2 hover:text-ink"
+              aria-label="Vollbild"
+            >
+              <FullscreenIcon />
+            </button>
+          </div>
           <ModePicker mode={chartMode} onChange={setChartMode} />
         </div>
-        <ProgressionChart
-          mode={chartMode}
-          activePlayers={activeInMode}
-          matches={matchesQ.data?.items ?? []}
-          colorByUserId={colorByUserId}
-        />
+        <ProgressionChart {...chartProps} fullscreen={false} />
       </div>
+
+      {chartFullscreen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-surface">
+          <div className="flex shrink-0 items-center justify-between px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <ModePicker mode={chartMode} onChange={setChartMode} />
+            <button
+              type="button"
+              onClick={() => setChartFullscreen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-xl text-ink2 ring-1 ring-line hover:text-ink"
+              aria-label="Vollbild schließen"
+            >
+              ×
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <ProgressionChart {...chartProps} fullscreen={true} />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function FullscreenIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" />
+    </svg>
   );
 }
 
@@ -148,9 +207,13 @@ const GRID = 'grid grid-cols-[1fr_auto_auto_auto_1px_auto] items-center gap-x-1'
 function Leaderboard({
   players,
   colorByUserId,
+  highlightedPlayer,
+  onHighlight,
 }: {
   players: User[];
   colorByUserId: Map<number, string>;
+  highlightedPlayer: number | null;
+  onHighlight: (id: number) => void;
 }) {
   const [sortBy, setSortBy] = useState<SortKey>('doppel');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -166,7 +229,6 @@ function Leaderboard({
 
   const sorted = useMemo(() => {
     return [...players].sort((a, b) => {
-      // Unrated (no games at this position) sink to the bottom either direction.
       const aRated = gamesFor(a, sortBy) > 0;
       const bRated = gamesFor(b, sortBy) > 0;
       if (aRated !== bRated) return aRated ? -1 : 1;
@@ -194,11 +256,16 @@ function Leaderboard({
         </div>
         {sorted.map((u) => {
           const color = colorByUserId.get(u.id);
+          const dimmed = highlightedPlayer !== null && highlightedPlayer !== u.id;
           return (
             <Link
               to={`/stats/users/${u.id}`}
               key={u.id}
-              className={`${GRID} border-b border-line px-3 py-2 last:border-b-0 active:bg-paper`}
+              className={`${GRID} border-b border-line px-3 py-2 last:border-b-0 active:bg-paper transition-opacity ${
+                dimmed ? 'opacity-30' : ''
+              }`}
+              onPointerEnter={() => onHighlight(u.id)}
+              onPointerLeave={() => onHighlight(u.id)}
             >
               <div className="flex min-w-0 items-center gap-2">
                 <Avatar user={u} size="sm" />
@@ -315,26 +382,66 @@ function ModePicker({
   );
 }
 
+// Number of consecutive matches without playing before a line is faded.
+const INACTIVE_GAP = 10;
+
 function ProgressionChart({
   mode,
   activePlayers,
   matches,
   colorByUserId,
+  fullscreen,
+  highlightedPlayer,
+  onHighlight,
 }: {
   mode: LeaderboardMode;
   activePlayers: User[];
   matches: Match[];
   colorByUserId: Map<number, string>;
+  fullscreen: boolean;
+  highlightedPlayer: number | null;
+  onHighlight: (id: number) => void;
 }) {
+  const chartId = useId();
+
   const data = useMemo(
     () => buildProgressionSeries(mode, activePlayers, matches),
     [mode, activePlayers, matches],
   );
 
-  // Stagger the avatar markers at the right edge when their final ratings are
-  // close enough to visually overlap. Walks players sorted by final rating;
-  // any chain of consecutive players within the "cluster" gap gets pushed
-  // progressively further right.
+  const { chartData, fadeInfo } = useMemo(() => {
+    const playerIds = activePlayers.map((p) => String(p.id));
+    const fadeMap = new Map<string, boolean[]>();
+
+    for (const id of playerIds) {
+      const fade: boolean[] = [];
+      let gap = INACTIVE_GAP;
+      for (let i = 0; i < data.length; i++) {
+        const changed = i > 0 && data[i][id] !== data[i - 1][id];
+        if (changed) gap = 0;
+        else gap++;
+        fade.push(gap >= INACTIVE_GAP);
+      }
+      fadeMap.set(id, fade);
+    }
+
+    const extended = data.map((point, i) => {
+      const row: Record<string, number | string | null> = { ...point };
+      for (const id of playerIds) {
+        const fade = fadeMap.get(id)!;
+        row[`${id}_active`] = fade[i] ? null : (point[id] as number | null);
+      }
+      return row;
+    });
+
+    const info = new Map<string, boolean>();
+    for (const id of playerIds) {
+      info.set(id, fadeMap.get(id)!.some(Boolean));
+    }
+
+    return { chartData: extended, fadeInfo: info };
+  }, [data, activePlayers]);
+
   const xOffsetByUserId = useMemo(() => {
     const offsets = new Map<number, number>();
     if (data.length === 0) return offsets;
@@ -357,7 +464,6 @@ function ProgressionChart({
     return offsets;
   }, [data, activePlayers]);
 
-  // Sort so higher-rated players render last (on top in SVG paint order)
   const sortedPlayers = useMemo(() => {
     if (data.length === 0) return activePlayers;
     const last = data[data.length - 1];
@@ -381,71 +487,102 @@ function ProgressionChart({
   const rightMargin = 18 + maxOffset;
 
   return (
-    <div>
-      <div className="h-56 rounded-xl bg-surface p-2 ring-1 ring-line">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: rightMargin, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke={cssVar('line')} />
-            <XAxis
-              dataKey="idx"
-              tick={{ fill: cssVar('ink2'), fontSize: 10 }}
-              tickFormatter={(idx) => formatShortDate(data[idx]?.created_at)}
-              minTickGap={28}
-              axisLine={{ stroke: cssVar('line') }}
-              tickLine={{ stroke: cssVar('line') }}
-            />
-            <YAxis
-              domain={['auto', 'auto']}
-              width={40}
-              tick={{ fill: cssVar('ink2'), fontSize: 11 }}
-            />
-            <Tooltip
-              contentStyle={{
-                background: cssVar('surface'),
-                border: `1px solid ${cssVar('line')}`,
-                color: cssVar('ink'),
-              }}
-              labelStyle={{ color: cssVar('ink2') }}
-              labelFormatter={(idx) => formatShortDate(data[idx as number]?.created_at)}
-              formatter={(value, name) => {
-                const p = activePlayers.find((p) => String(p.id) === name);
-                return [Math.round(Number(value)), p?.name ?? name];
-              }}
-            />
-            {sortedPlayers.map((p) => {
-              const color = colorByUserId.get(p.id) ?? '#888';
-              const xOffset = xOffsetByUserId.get(p.id) ?? 0;
-              return (
-                <Line
-                  key={p.id}
-                  type="monotone"
-                  dataKey={String(p.id)}
-                  stroke={color}
-                  strokeWidth={2}
-                  isAnimationActive={false}
-                  connectNulls
-                  dot={(props: { cx?: number; cy?: number; index?: number; key?: string }) => {
-                    const { cx, cy, index, key } = props;
-                    if (index !== lastIdx || cx == null || cy == null) {
-                      return <g key={key ?? `dot-${p.id}-${index}`} />;
-                    }
-                    return (
-                      <EndAvatar
-                        key={key ?? `end-${p.id}`}
-                        cx={cx}
-                        cy={cy}
-                        color={color}
-                        user={p}
-                        xOffset={xOffset}
-                      />
-                    );
-                  }}
-                />
-              );
-            })}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+    <div className={`rounded-xl bg-surface p-2 ring-1 ring-line ${fullscreen ? 'h-full' : 'h-56'}`}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData} margin={{ top: 8, right: rightMargin, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={cssVar('line')} />
+          <XAxis
+            dataKey="idx"
+            tick={{ fill: cssVar('ink2'), fontSize: 10 }}
+            tickFormatter={(idx) => formatShortDate(data[idx]?.created_at)}
+            minTickGap={28}
+            axisLine={{ stroke: cssVar('line') }}
+            tickLine={{ stroke: cssVar('line') }}
+          />
+          <YAxis
+            domain={['auto', 'auto']}
+            width={40}
+            tick={{ fill: cssVar('ink2'), fontSize: 11 }}
+          />
+          <Tooltip
+            contentStyle={{
+              background: cssVar('surface'),
+              border: `1px solid ${cssVar('line')}`,
+              color: cssVar('ink'),
+            }}
+            labelStyle={{ color: cssVar('ink2') }}
+            labelFormatter={(idx) => formatShortDate(data[idx as number]?.created_at)}
+            formatter={(value, name) => {
+              const rawId = String(name).replace(/_active$/, '');
+              const p = activePlayers.find((p) => String(p.id) === rawId);
+              return [Math.round(Number(value)), p?.name ?? name];
+            }}
+            itemSorter={(item) => -(Number(item.value) || 0)}
+          />
+          {/* Ghost lines: full path at reduced opacity — visible where player is inactive */}
+          {sortedPlayers.map((p) => {
+            const id = String(p.id);
+            const color = colorByUserId.get(p.id) ?? '#888';
+            const hasInactive = fadeInfo.get(id) ?? false;
+            if (!hasInactive) return null;
+            const dimmed = highlightedPlayer !== null && highlightedPlayer !== p.id;
+            return (
+              <Line
+                key={`ghost-${p.id}`}
+                type="monotone"
+                dataKey={id}
+                stroke={color}
+                strokeWidth={1.5}
+                strokeOpacity={dimmed ? 0.05 : 0.2}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+                tooltipType="none"
+              />
+            );
+          })}
+          {/* Active lines: full color, breaks during inactive stretches */}
+          {sortedPlayers.map((p) => {
+            const id = String(p.id);
+            const color = colorByUserId.get(p.id) ?? '#888';
+            const hasInactive = fadeInfo.get(id) ?? false;
+            const xOffset = xOffsetByUserId.get(p.id) ?? 0;
+            const dimmed = highlightedPlayer !== null && highlightedPlayer !== p.id;
+            return (
+              <Line
+                key={`active-${p.id}`}
+                type="monotone"
+                dataKey={hasInactive ? `${id}_active` : id}
+                name={id}
+                stroke={color}
+                strokeWidth={highlightedPlayer === p.id ? 3.5 : 2}
+                strokeOpacity={dimmed ? 0.12 : 1}
+                isAnimationActive={false}
+                connectNulls={false}
+                dot={(props: { cx?: number; cy?: number; index?: number; key?: string }) => {
+                  const { cx, cy, index, key } = props;
+                  if (index !== lastIdx || cx == null || cy == null) {
+                    return <g key={key ?? `dot-${p.id}-${index}`} />;
+                  }
+                  return (
+                    <EndAvatar
+                      key={key ?? `end-${p.id}`}
+                      cx={cx}
+                      cy={cy}
+                      color={color}
+                      user={p}
+                      xOffset={xOffset}
+                      dimmed={dimmed}
+                      onClick={() => onHighlight(p.id)}
+                      clipPrefix={chartId}
+                    />
+                  );
+                }}
+              />
+            );
+          })}
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -456,19 +593,26 @@ function EndAvatar({
   color,
   user,
   xOffset,
+  dimmed,
+  onClick,
+  clipPrefix,
 }: {
   cx: number;
   cy: number;
   color: string;
   user: User;
   xOffset: number;
+  dimmed?: boolean;
+  onClick?: () => void;
+  clipPrefix?: string;
 }) {
   const r = 10;
   const x = cx + 6 + xOffset;
+  const opacity = dimmed ? 0.2 : 1;
   if (user.avatar_url) {
-    const clipId = `end-avatar-clip-${user.id}`;
+    const clipId = `${clipPrefix ?? ''}end-avatar-clip-${user.id}`;
     return (
-      <g>
+      <g opacity={opacity} onClick={onClick} cursor="pointer">
         <defs>
           <clipPath id={clipId}>
             <circle cx={x} cy={cy} r={r} />
@@ -488,7 +632,7 @@ function EndAvatar({
     );
   }
   return (
-    <g>
+    <g opacity={opacity} onClick={onClick} cursor="pointer">
       <circle cx={x} cy={cy} r={r} fill={cssVar('surface')} stroke={color} strokeWidth={1.5} />
       <text
         x={x}
@@ -564,10 +708,6 @@ function buildProgressionSeries(
   return data;
 }
 
-// "Doppel" view: per player, plot (attacker + defender) / 2 over the timeline
-// of doubles matches. Each match updates the player's attacker OR defender
-// rating depending on the position they played; the unchanged half carries
-// forward.
 function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]): ProgressionPoint[] {
   const relevant = matches
     .filter((m) => m.mode === 'doubles')

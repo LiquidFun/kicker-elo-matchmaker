@@ -103,7 +103,7 @@ function SessionTotals({
               <span className="flex-1 truncate text-sm text-ink">{u.name}</span>
               <PositionDelta label="⚔" value={t.attacker} />
               <PositionDelta label="🛡" value={t.defender} />
-              <PositionDelta label="E" value={t.singles} />
+              <PositionDelta label="🤺" value={t.singles} />
             </li>
           );
         })}

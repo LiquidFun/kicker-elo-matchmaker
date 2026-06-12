@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 
+import { useMe } from '../api/hooks';
 import type { Match, MatchPlayer, Position, User } from '../api/types';
 import Avatar from './Avatar';
 
 const POS_ABBR: Record<Position, string> = {
   attacker: '⚔',
   defender: '🛡',
-  singles: '',
+  singles: '🤺',
 };
 
 // Match pitch layout: Team1 has A on top / S on bottom,
@@ -35,6 +36,8 @@ export default function MatchCard({
   onDelete?: () => void;
   className?: string;
 }) {
+  const me = useMe();
+  const meId = me.data?.id ?? null;
   const team1 = match.players
     .filter((p) => p.team === 1)
     .sort((a, b) => pitchOrder(a.position, 1) - pitchOrder(b.position, 1));
@@ -73,6 +76,7 @@ export default function MatchCard({
           usersById={usersById}
           align="right"
           isWinner={match.winner_team === 1}
+          meId={meId}
         />
         <div className="flex items-center gap-1 text-xl font-bold tabular-nums">
           <span className={match.winner_team === 1 ? 'text-pitch' : 'text-ink2'}>
@@ -88,6 +92,7 @@ export default function MatchCard({
           usersById={usersById}
           align="left"
           isWinner={match.winner_team === 2}
+          meId={meId}
         />
       </div>
     </div>
@@ -99,11 +104,13 @@ function TeamLine({
   usersById,
   align,
   isWinner,
+  meId,
 }: {
   players: MatchPlayer[];
   usersById: Record<number, User>;
   align: 'left' | 'right';
   isWinner: boolean;
+  meId: number | null;
 }) {
   return (
     <div
@@ -120,6 +127,7 @@ function TeamLine({
         }
         const delta = p.rating_delta;
         const posLabel = POS_ABBR[p.position];
+        const isMe = p.user_id === meId;
         return (
           <Link
             to={`/stats/users/${u.id}`}
@@ -128,9 +136,9 @@ function TeamLine({
               align === 'right' ? 'flex-row-reverse' : ''
             }`}
           >
-            <Avatar user={u} size="sm" />
+            <Avatar user={u} size="sm" className={isMe ? 'ring-2 ring-pitch' : ''} />
             <span
-              className={`truncate text-sm ${isWinner ? 'font-semibold text-ink' : 'text-ink2'}`}
+              className={`truncate text-sm ${isWinner ? 'font-semibold text-ink' : 'text-ink2'} ${isMe ? 'underline decoration-pitch/40 underline-offset-2' : ''}`}
             >
               {u.name}
             </span>
