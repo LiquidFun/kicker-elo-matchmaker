@@ -5,6 +5,51 @@ import type { Mode } from '../api/types';
 import Modal from '../components/Modal';
 import { useTheme } from '../theme';
 
+function NumberStepper({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+}) {
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+  return (
+    <div className="flex items-center justify-center gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value - step))}
+        className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
+        aria-label="Verringern"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(clamp(Number(e.target.value) || min))}
+        className="h-10 w-20 rounded-lg bg-paper text-center text-xl outline-none ring-1 ring-line focus:ring-rail"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value + step))}
+        className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
+        aria-label="Erhöhen"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsModal({
   open,
   onClose,
@@ -24,10 +69,6 @@ export default function SettingsModal({
 }) {
   const settingsQ = useSettings();
   const [theme, setTheme] = useTheme();
-
-  function adjust(delta: number) {
-    setGoalsToWin(Math.max(1, Math.min(99, goalsToWin + delta)));
-  }
 
   return (
     <Modal open={open} onClose={onClose} title="Spieleinstellungen">
@@ -66,33 +107,7 @@ export default function SettingsModal({
 
       <div className="mb-4">
         <span className="mb-1 block text-sm text-ink2">Tore zum Sieg</span>
-        <div className="flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={() => adjust(-1)}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
-            aria-label="Verringern"
-          >
-            −
-          </button>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={99}
-            value={goalsToWin}
-            onChange={(e) => setGoalsToWin(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-            className="h-10 w-20 rounded-lg bg-paper text-center text-xl outline-none ring-1 ring-line focus:ring-rail"
-          />
-          <button
-            type="button"
-            onClick={() => adjust(1)}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
-            aria-label="Erhöhen"
-          >
-            +
-          </button>
-        </div>
+        <NumberStepper value={goalsToWin} onChange={setGoalsToWin} min={1} max={99} />
       </div>
 
       <div className="mb-4">
@@ -169,33 +184,7 @@ function AdminSettings({
       </div>
       <div className="mb-3">
         <span className="mb-1 block text-sm text-ink2">2v1 Ausgleich (Elo)</span>
-        <div className="flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={() => setPenalty(Math.max(0, penalty - 10))}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
-            aria-label="Verringern"
-          >
-            −
-          </button>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={500}
-            value={penalty}
-            onChange={(e) => setPenalty(Math.max(0, Math.min(500, Number(e.target.value) || 0)))}
-            className="h-10 w-20 rounded-lg bg-paper text-center text-xl outline-none ring-1 ring-line focus:ring-rail"
-          />
-          <button
-            type="button"
-            onClick={() => setPenalty(Math.min(500, penalty + 10))}
-            className="h-10 w-10 rounded-lg bg-paper text-2xl ring-1 ring-line"
-            aria-label="Erhöhen"
-          >
-            +
-          </button>
-        </div>
+        <NumberStepper value={penalty} onChange={setPenalty} min={0} max={500} step={10} />
       </div>
       <button
         onClick={save}

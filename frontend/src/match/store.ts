@@ -155,17 +155,17 @@ export const useMatchStore = create<MatchState>((set) => ({
         if (slots[k] != null) continue;
         const pool = k.startsWith('team1') ? team1Unplaced : team2Unplaced;
         const uid = pool.shift();
-        if (uid != null) slots[k] = uid;
+        if (uid != null) {
+          slots[k] = uid;
+          placed.add(uid);
+        }
       }
 
       // 4) Excess unplaced → sidelined
       const newSidelined = [...team1Unplaced, ...team2Unplaced];
 
       // 5) Restore previously sidelined players into remaining empty slots
-      const finalPlaced = new Set(
-        newActive.map((k) => slots[k]).filter((v): v is number => v != null),
-      );
-      const restorable = s.sidelined.filter((uid) => !finalPlaced.has(uid));
+      const restorable = s.sidelined.filter((uid) => !placed.has(uid));
       for (const k of newActive) {
         if (slots[k] != null) continue;
         const uid = restorable.shift();
