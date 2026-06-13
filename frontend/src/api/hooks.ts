@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from './client';
 import type {
@@ -252,6 +253,15 @@ export const useGlobalStats = () =>
     queryKey: ['global-stats'],
     queryFn: () => api.get<GlobalStats>('/api/stats/global'),
   });
+
+export const useUsersById = () => {
+  const usersQ = useUsers();
+  return useMemo(() => {
+    const m: Record<number, User> = {};
+    for (const u of usersQ.data ?? []) m[u.id] = u;
+    return m;
+  }, [usersQ.data]);
+};
 
 export const useCanManage = () => {
   const me = useMe();

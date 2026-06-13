@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import { useCanManage, useDeleteMatch, useMatches, useUsers } from '../api/hooks';
+import { useCanManage, useDeleteMatch, useMatches, useUsersById } from '../api/hooks';
 import type { Match, MatchList, Mode, User } from '../api/types';
 import MatchCard from '../match/MatchCard';
 import { SESSION_GAP_MS } from '../utils/session';
@@ -33,7 +33,7 @@ export default function GamesListPage() {
   const page = parsePage(params.get('page'));
 
   const canManage = useCanManage();
-  const usersQ = useUsers();
+  const usersById = useUsersById();
   const matchesQ = useMatches({
     mode: filter === 'all' ? undefined : filter,
     limit: PAGE_SIZE,
@@ -53,12 +53,6 @@ export default function GamesListPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  const usersById = useMemo(() => {
-    const m: Record<number, User> = {};
-    for (const u of usersQ.data ?? []) m[u.id] = u;
-    return m;
-  }, [usersQ.data]);
 
   const total = matchesQ.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

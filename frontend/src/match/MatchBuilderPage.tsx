@@ -20,6 +20,7 @@ import {
   useSettings,
   useTwoVsOneBalance,
   useUsers,
+  useUsersById,
 } from '../api/hooks';
 import type { Lineup, MatchPlayerInput, Mode, TwoVsOneLineup, User } from '../api/types';
 import Modal from '../components/Modal';
@@ -36,6 +37,10 @@ import {
   slotsForMode,
   useMatchStore,
 } from './store';
+
+function vibrate(ms: number) {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
+}
 
 function slotPosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' | 'solo' {
   if (slot.endsWith('.attacker')) return 'attacker';
@@ -142,10 +147,6 @@ export default function MatchBuilderPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [armed, setArmed] = useState<SlotKey | null>(null);
 
-  function vibrate(ms: number) {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
-  }
-
   const matchesQ = useMatches({ limit: 50 });
   const sessionMatchCount = useMemo(
     () => latestSession(matchesQ.data?.items ?? []).length,
@@ -169,11 +170,7 @@ export default function MatchBuilderPage() {
 
   const effectiveGoalsToWin = goalsToWin ?? settingsQ.data?.default_goals_to_win ?? 5;
 
-  const usersById: Record<number, User> = useMemo(() => {
-    const map: Record<number, User> = {};
-    for (const u of usersQ.data ?? []) map[u.id] = u;
-    return map;
-  }, [usersQ.data]);
+  const usersById = useUsersById();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1065,10 +1062,6 @@ function BalanceButton({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPressRef = useRef(false);
   const [pressing, setPressing] = useState(false);
-
-  function vibrate(ms: number) {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
-  }
 
   function clearTimer() {
     if (timerRef.current !== null) {

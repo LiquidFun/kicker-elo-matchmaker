@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { useLogout, useMatches, useMe, useUserStats, useUsers } from '../api/hooks';
+import { useLogout, useMatches, useMe, useUserStats, useUsersById } from '../api/hooks';
 import type { Position, User } from '../api/types';
 import EditUserDialog from '../admin/EditUserDialog';
 import Avatar from '../match/Avatar';
@@ -33,7 +33,7 @@ export default function UserProfilePage() {
   const { userId } = useParams();
   const id = Number(userId);
   const stats = useUserStats(id);
-  const usersQ = useUsers();
+  const usersById = useUsersById();
   const matchesQ = useMatches({ userId: id, limit: 10 });
   const me = useMe();
   const logout = useLogout();
@@ -41,12 +41,6 @@ export default function UserProfilePage() {
   useTheme(); // re-render on theme change so chart colors refresh
   const POS_COLOR = posColors();
   const isMe = me.data?.id === id;
-
-  const usersById = useMemo(() => {
-    const m: Record<number, User> = {};
-    for (const u of usersQ.data ?? []) m[u.id] = u;
-    return m;
-  }, [usersQ.data]);
 
   const chartData = useMergedHistory(stats.data?.history);
 
