@@ -94,6 +94,7 @@ export const useDeleteMatch = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['matches'] });
       qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['settings'] });
     },
   });
 };
@@ -195,6 +196,7 @@ export const useCreateMatch = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['matches'] });
       qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['settings'] });
     },
   });
 };
@@ -221,12 +223,13 @@ export const useSettings = () =>
   useQuery({
     queryKey: ['settings'],
     queryFn: () => api.get<Settings>('/api/settings'),
+    refetchOnWindowFocus: true,
   });
 
 export const useUpdateSettings = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { default_goals_to_win: number }) =>
+    mutationFn: (vars: { default_goals_to_win: number; twovone_penalty?: number }) =>
       api.put<Settings>('/api/settings', vars),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });

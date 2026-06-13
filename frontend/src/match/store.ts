@@ -41,6 +41,9 @@ interface MatchState {
   // The first time the lineup fills up, arrivals are randomly shuffled so the
   // initial four are evicted in random order rather than placement order.
   settled: boolean;
+  // Players removed when switching to a mode with fewer slots, restored when
+  // switching back to a mode with more slots.
+  sidelined: number[];
   setMode: (mode: Mode) => void;
   place: (slot: SlotKey, userId: number) => void;
   unplace: (slot: SlotKey) => void;
@@ -111,15 +114,77 @@ export const useMatchStore = create<MatchState>((set) => ({
   arrival: {},
   nextSeq: 0,
   settled: false,
+  sidelined: [],
 
   setMode: (mode) =>
-    set(() => ({
-      mode,
-      slots: { ...emptySlots },
-      arrival: {},
-      nextSeq: 0,
-      settled: false,
-    })),
+    set((s) => {
+      if (s.mode === mode) return {};
+
+      const oldActive = slotsForMode(s.mode);
+      const newActive = slotsForMode(mode);
+      const slots = { ...emptySlots };
+
+      // 1) Copy players whose slot key exists in both modes
+      for (const k of newActive) {
+        if (oldActive.includes(k)) slots[k] = s.slots[k];
+      }
+
+      // 2) Gather unplaced players per team
+      const placed = new Set(
+        newActive.map((k) => slots[k]).filter((v): v is number => v != null),
+      );
+      const team1Unplaced: number[] = [];
+      const team2Unplaced: number[] = [];
+      for (const k of oldActive) {
+        const uid = s.slots[k];
+        if (uid == null || placed.has(uid)) continue;
+        if (k.startsWith('team1')) team1Unplaced.push(uid);
+        else team2Unplaced.push(uid);
+      }
+      const shuffle = (arr: number[]) => {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+      };
+      shuffle(team1Unplaced);
+      shuffle(team2Unplaced);
+
+      // 3) Fill empty new-mode slots from same-team unplaced players
+      for (const k of newActive) {
+        if (slots[k] != null) continue;
+        const pool = k.startsWith('team1') ? team1Unplaced : team2Unplaced;
+        const uid = pool.shift();
+        if (uid != null) slots[k] = uid;
+      }
+
+      // 4) Excess unplaced → sidelined
+      const newSidelined = [...team1Unplaced, ...team2Unplaced];
+
+      // 5) Restore previously sidelined players into remaining empty slots
+      const finalPlaced = new Set(
+        newActive.map((k) => slots[k]).filter((v): v is number => v != null),
+      );
+      const restorable = s.sidelined.filter((uid) => !finalPlaced.has(uid));
+      for (const k of newActive) {
+        if (slots[k] != null) continue;
+        const uid = restorable.shift();
+        if (uid == null) break;
+        slots[k] = uid;
+      }
+      newSidelined.push(...restorable);
+
+      // 6) Update arrival tracking
+      const arrival = { ...s.arrival };
+      let nextSeq = s.nextSeq;
+      for (const uid of newSidelined) delete arrival[uid];
+      for (const k of newActive) {
+        const uid = slots[k];
+        if (uid != null && !(uid in arrival)) arrival[uid] = nextSeq++;
+      }
+
+      return { mode, sidelined: newSidelined, ...normalize(slots, arrival, nextSeq, false, mode) };
+    }),
 
   place: (slot, userId) =>
     set((s) => {
@@ -189,6 +254,7 @@ export const useMatchStore = create<MatchState>((set) => ({
       arrival: {},
       nextSeq: 0,
       settled: false,
+      sidelined: [],
     })),
 
   setLineup: (assignments) =>
