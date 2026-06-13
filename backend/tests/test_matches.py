@@ -324,3 +324,88 @@ def test_non_admin_cannot_exceed_limit_cap(client, admin_client):
 def test_admin_can_exceed_limit_cap(admin_client):
     r = admin_client.get("/api/matches?limit=10000")
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 2v1 mode
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def three_players(admin_client) -> list[int]:
+    return [_create_user(admin_client, n) for n in ["gina", "hank", "ivy"]]
+
+
+def _twovone(client, players, t1=5, t2=0):
+    a, b, solo = players
+    return client.post(
+        "/api/matches",
+        json={
+            "mode": "2v1",
+            "goals_to_win": 5,
+            "team1_score": t1,
+            "team2_score": t2,
+            "players": [
+                {"user_id": a, "team": 1, "position": "attacker"},
+                {"user_id": b, "team": 1, "position": "defender"},
+                {"user_id": solo, "team": 2, "position": "solo"},
+            ],
+        },
+    )
+
+
+def test_twovone_match_creates_successfully(admin_client, three_players):
+    r = _twovone(admin_client, three_players)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["mode"] == "2v1"
+    # Solo player is expanded to two match_player rows
+    solo_id = three_players[2]
+    solo_entries = [p for p in body["players"] if p["user_id"] == solo_id]
+    assert len(solo_entries) == 2
+    positions = sorted(e["position"] for e in solo_entries)
+    assert positions == ["attacker", "defender"]
+
+
+def test_twovone_updates_ratings(admin_client, three_players):
+    a, b, solo = three_players
+    before = {u["id"]: u for u in admin_client.get("/api/users").json()}
+    _twovone(admin_client, three_players, t1=5, t2=0)
+    after = {u["id"]: u for u in admin_client.get("/api/users").json()}
+    # Pair members gained (they won)
+    assert after[a]["rating_attacker"] > before[a]["rating_attacker"]
+    assert after[b]["rating_defender"] > before[b]["rating_defender"]
+    # Solo player lost (they lost)
+    assert after[solo]["rating_attacker"] < before[solo]["rating_attacker"]
+    assert after[solo]["rating_defender"] < before[solo]["rating_defender"]
+
+
+def test_twovone_updates_penalty(admin_client, three_players):
+    settings_before = admin_client.get("/api/settings").json()["twovone_penalty"]
+    _twovone(admin_client, three_players, t1=5, t2=0)
+    settings_after = admin_client.get("/api/settings").json()["twovone_penalty"]
+    # Pair won → penalty should increase
+    assert settings_after > settings_before
+
+
+def test_twovone_delete_reverts_ratings_and_penalty(admin_client, three_players):
+    a, b, solo = three_players
+    before = {u["id"]: u for u in admin_client.get("/api/users").json()}
+    penalty_before = admin_client.get("/api/settings").json()["twovone_penalty"]
+    r = _twovone(admin_client, three_players, t1=5, t2=0)
+    match_id = r.json()["id"]
+    admin_client.delete(f"/api/matches/{match_id}")
+    after = {u["id"]: u for u in admin_client.get("/api/users").json()}
+    penalty_after = admin_client.get("/api/settings").json()["twovone_penalty"]
+    assert after[a]["rating_attacker"] == pytest.approx(before[a]["rating_attacker"])
+    assert after[solo]["rating_attacker"] == pytest.approx(before[solo]["rating_attacker"])
+    assert penalty_after == pytest.approx(penalty_before)
+
+
+def test_twovone_balance(admin_client, three_players):
+    r = admin_client.post("/api/balance/2v1", json={"player_ids": three_players})
+    assert r.status_code == 200
+    body = r.json()
+    assert "best" in body
+    assert body["best"]["solo"] in three_players
+    assert len(body["alternatives"]) == 5  # 6 total - 1 best

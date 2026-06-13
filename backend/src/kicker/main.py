@@ -18,7 +18,7 @@ from .routers import users as users_router
 
 
 def _auto_migrate_if_needed() -> None:
-    """Run the org migration on existing SQLite databases that lack the new schema."""
+    """Run pending migrations on existing SQLite databases."""
     settings = get_settings()
     url = settings.database_url
     if not url.startswith("sqlite:///"):
@@ -32,12 +32,20 @@ def _auto_migrate_if_needed() -> None:
     has_org_col = any(
         row[1] == "organization_id" for row in con.execute("PRAGMA table_info(users)")
     )
+    has_penalty_col = any(
+        row[1] == "penalty_before" for row in con.execute("PRAGMA table_info(matches)")
+    )
     con.close()
-    if has_org_col:
-        return  # already migrated
-    from .scripts.migrate_orgs import migrate
 
-    migrate(db_path)
+    if not has_org_col:
+        from .scripts.migrate_orgs import migrate
+
+        migrate(db_path)
+
+    if not has_penalty_col:
+        from .scripts.migrate_twovone import migrate as migrate_twovone
+
+        migrate_twovone(db_path)
 
 
 @asynccontextmanager

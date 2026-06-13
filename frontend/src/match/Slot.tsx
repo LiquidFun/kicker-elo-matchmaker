@@ -12,11 +12,13 @@ const POSITION_LABEL: Record<SlotKey, string> = {
   'team2.defender': 'Abwehr',
   'team1.singles': 'Spieler',
   'team2.singles': 'Spieler',
+  'team2.solo': 'Solo',
 };
 
-function activePosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' {
+function activePosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' | 'solo' {
   if (slot.endsWith('.attacker')) return 'attacker';
   if (slot.endsWith('.defender')) return 'defender';
+  if (slot.endsWith('.solo')) return 'solo';
   return 'singles';
 }
 
@@ -26,12 +28,14 @@ export default function Slot({
   mode,
   armed,
   onTap,
+  penalty,
 }: {
   slotKey: SlotKey;
   user: User | null;
   mode: Mode;
   armed: boolean;
   onTap: () => void;
+  penalty?: number;
 }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `slot:${slotKey}` });
   const drag = useDraggable({
@@ -90,18 +94,21 @@ export default function Slot({
           <div className="max-w-[80px] truncate text-xs text-ink">
             {user.name}
           </div>
-          {mode === 'doubles' ? (
+          {mode === 'doubles' || mode === '2v1' ? (
             <div className="flex flex-col items-center gap-0.5 text-[10px] tabular-nums leading-none">
               <RatingPair
                 label="⚔"
                 value={user.rating_attacker}
-                active={active_ === 'attacker'}
+                active={active_ === 'attacker' || active_ === 'solo'}
               />
               <RatingPair
                 label="🛡"
                 value={user.rating_defender}
-                active={active_ === 'defender'}
+                active={active_ === 'defender' || active_ === 'solo'}
               />
+              {active_ === 'solo' && penalty != null && (
+                <span className="font-semibold text-accent">−{Math.round(penalty)}</span>
+              )}
             </div>
           ) : (
             <div className="text-[10px] font-semibold tabular-nums leading-none text-ink">

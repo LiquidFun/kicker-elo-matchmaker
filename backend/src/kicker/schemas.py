@@ -12,8 +12,9 @@ UTCDatetime = Annotated[
     ),
 ]
 
-Mode = Literal["doubles", "singles"]
+Mode = Literal["doubles", "singles", "2v1"]
 Position = Literal["attacker", "defender", "singles"]
+InputPosition = Literal["attacker", "defender", "singles", "solo"]
 Role = Literal["admin", "moderator", "user"]
 
 
@@ -113,7 +114,7 @@ class PasswordChangeIn(BaseModel):
 class MatchPlayerIn(BaseModel):
     user_id: int
     team: Literal[1, 2]
-    position: Position
+    position: InputPosition
 
 
 class MatchCreateIn(BaseModel):
@@ -171,6 +172,22 @@ class BalanceOut(BaseModel):
     alternatives: list[LineupOut]
 
 
+class TwoVsOneBalanceIn(BaseModel):
+    player_ids: list[int] = Field(min_length=3, max_length=3)
+
+
+class TwoVsOneLineupOut(BaseModel):
+    team1_attacker: int
+    team1_defender: int
+    solo: int
+    win_prob_team1: float
+
+
+class TwoVsOneBalanceOut(BaseModel):
+    best: TwoVsOneLineupOut
+    alternatives: list[TwoVsOneLineupOut]
+
+
 class PreviewIn(BaseModel):
     mode: Mode
     goals_to_win: int = Field(ge=1, le=99)
@@ -190,10 +207,12 @@ class PreviewOut(BaseModel):
 
 class SettingsOut(BaseModel):
     default_goals_to_win: int
+    twovone_penalty: float
 
 
 class SettingsIn(BaseModel):
     default_goals_to_win: int = Field(ge=1, le=99)
+    twovone_penalty: float | None = Field(default=None, ge=0, le=500)
 
 
 class OrganizationOut(BaseModel):

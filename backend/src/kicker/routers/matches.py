@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import auth, elo, models, schemas
 from ..db import get_db
+from .settings_router import get_twovone_penalty, set_twovone_penalty
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 
@@ -49,6 +50,24 @@ def _validate_lineup(payload: schemas.MatchCreateIn) -> None:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST, "Each team needs one attacker and one defender"
                 )
+    elif payload.mode == "2v1":
+        if len(payload.players) != 3:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "2v1 requires 3 players")
+        team1 = [p for p in payload.players if p.team == 1]
+        team2 = [p for p in payload.players if p.team == 2]
+        if len(team1) != 2:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Team 1 needs 2 players in 2v1")
+        if len(team2) != 1:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Team 2 needs 1 player (solo) in 2v1")
+        positions = sorted(p.position for p in team1)
+        if positions != ["attacker", "defender"]:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Team 1 needs one attacker and one defender"
+            )
+        if team2[0].position != "solo":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Team 2 player must use position 'solo'"
+            )
     else:  # singles
         if len(payload.players) != 2:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Singles requires 2 players")
@@ -98,6 +117,36 @@ def _build_singles_lineup(
     return elo.SinglesLineup(player1=ratings[p1.user_id], player2=ratings[p2.user_id])
 
 
+def _build_twovone_lineup(
+    payload: schemas.MatchCreateIn,
+    ratings: dict[int, elo.PlayerRatings],
+    penalty: float,
+) -> elo.TwoVsOneLineup:
+    by_slot: dict[tuple[int, str], elo.PlayerRatings] = {}
+    solo_ratings: elo.PlayerRatings | None = None
+    for p in payload.players:
+        if p.position == "solo":
+            solo_ratings = ratings[p.user_id]
+        else:
+            by_slot[(p.team, p.position)] = ratings[p.user_id]
+    assert solo_ratings is not None
+    return elo.TwoVsOneLineup(
+        team1_attacker=by_slot[(1, "attacker")],
+        team1_defender=by_slot[(1, "defender")],
+        solo=solo_ratings,
+        penalty=penalty,
+    )
+
+
+def _apply_delta(user: models.User, position: str, delta: float) -> tuple[float, float]:
+    """Apply a rating delta and increment games count. Returns (before, after)."""
+    before = getattr(user, f"rating_{position}")
+    after = before + delta
+    setattr(user, f"rating_{position}", after)
+    setattr(user, f"games_{position}", getattr(user, f"games_{position}") + 1)
+    return before, after
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_match(
     payload: schemas.MatchCreateIn,
@@ -115,12 +164,22 @@ def create_match(
         )
     ratings = _player_ratings(users)
 
+    penalty_before_val: float | None = None
+
     if payload.mode == "doubles":
         lineup = _build_doubles_lineup(payload, ratings)
         deltas = elo.doubles_deltas(lineup, payload.team1_score, payload.team2_score)
+    elif payload.mode == "2v1":
+        penalty = get_twovone_penalty(db, org_id)
+        penalty_before_val = penalty
+        lineup_2v1 = _build_twovone_lineup(payload, ratings, penalty)
+        deltas, penalty_delta = elo.twovone_deltas(
+            lineup_2v1, payload.team1_score, payload.team2_score
+        )
+        set_twovone_penalty(db, org_id, penalty + penalty_delta)
     else:
-        lineup = _build_singles_lineup(payload, ratings)
-        deltas = elo.singles_deltas(lineup, payload.team1_score, payload.team2_score)
+        lineup_s = _build_singles_lineup(payload, ratings)
+        deltas = elo.singles_deltas(lineup_s, payload.team1_score, payload.team2_score)
 
     winner_team = 1 if payload.team1_score > payload.team2_score else 2
     match = models.Match(
@@ -131,28 +190,43 @@ def create_match(
         winner_team=winner_team,
         created_by_user_id=actor.id if actor is not None else None,
         organization_id=org_id,
+        penalty_before=penalty_before_val,
     )
     db.add(match)
     db.flush()
 
     for p in payload.players:
         user = users[p.user_id]
-        delta = deltas[(p.user_id, p.position)]
-        before = getattr(user, f"rating_{p.position}")
-        after = before + delta
-        setattr(user, f"rating_{p.position}", after)
-        setattr(user, f"games_{p.position}", getattr(user, f"games_{p.position}") + 1)
-        db.add(
-            models.MatchPlayer(
-                match_id=match.id,
-                user_id=p.user_id,
-                team=p.team,
-                position=p.position,
-                rating_before=before,
-                rating_after=after,
-                rating_delta=delta,
+        if p.position == "solo":
+            # Expand solo into two MatchPlayer rows (attacker + defender).
+            for pos in ("attacker", "defender"):
+                delta = deltas[(p.user_id, pos)]
+                before, after = _apply_delta(user, pos, delta)
+                db.add(
+                    models.MatchPlayer(
+                        match_id=match.id,
+                        user_id=p.user_id,
+                        team=p.team,
+                        position=pos,
+                        rating_before=before,
+                        rating_after=after,
+                        rating_delta=delta,
+                    )
+                )
+        else:
+            delta = deltas[(p.user_id, p.position)]
+            before, after = _apply_delta(user, p.position, delta)
+            db.add(
+                models.MatchPlayer(
+                    match_id=match.id,
+                    user_id=p.user_id,
+                    team=p.team,
+                    position=p.position,
+                    rating_before=before,
+                    rating_after=after,
+                    rating_delta=delta,
+                )
             )
-        )
 
     db.commit()
     db.refresh(match)
@@ -242,5 +316,8 @@ def delete_match(
             continue
         setattr(user, f"rating_{mp.position}", mp.rating_before)
         setattr(user, f"games_{mp.position}", getattr(user, f"games_{mp.position}") - 1)
+    # Revert 2v1 penalty
+    if m.mode == "2v1" and m.penalty_before is not None:
+        set_twovone_penalty(db, org_id, m.penalty_before)
     db.delete(m)
     db.commit()

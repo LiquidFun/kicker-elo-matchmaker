@@ -3,6 +3,7 @@ import { ApiError, api } from './client';
 import type {
   AppConfig,
   BalanceResult,
+  TwoVsOneBalanceResult,
   GlobalStats,
   LeaderboardMode,
   Match,
@@ -202,6 +203,12 @@ export const useBalance = () =>
   useMutation({
     mutationFn: (vars: { player_ids: number[] }) =>
       api.post<BalanceResult>('/api/balance', vars),
+  });
+
+export const useTwoVsOneBalance = () =>
+  useMutation({
+    mutationFn: (vars: { player_ids: number[] }) =>
+      api.post<TwoVsOneBalanceResult>('/api/balance/2v1', vars),
   });
 
 export const usePreview = () =>

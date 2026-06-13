@@ -13,12 +13,13 @@ type Filter = 'all' | Mode;
 
 const FILTER_LABEL: Record<Filter, string> = {
   all: 'Alle',
-  doubles: 'Doppel',
-  singles: 'Einzel',
+  doubles: '2v2',
+  '2v1': '2v1',
+  singles: '1v1',
 };
 
 function parseFilter(raw: string | null): Filter {
-  return raw === 'doubles' || raw === 'singles' ? raw : 'all';
+  return raw === 'doubles' || raw === 'singles' || raw === '2v1' ? raw : 'all';
 }
 
 function parsePage(raw: string | null): number {
@@ -139,7 +140,7 @@ export default function GamesListPage() {
 function FilterTabs({ filter, onChange }: { filter: Filter; onChange: (f: Filter) => void }) {
   return (
     <div className="flex rounded-full bg-surface p-0.5 text-xs ring-1 ring-line">
-      {(['all', 'doubles', 'singles'] as Filter[]).map((f) => (
+      {(['all', 'doubles', '2v1', 'singles'] as Filter[]).map((f) => (
         <button
           key={f}
           onClick={() => onChange(f)}

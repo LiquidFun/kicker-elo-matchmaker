@@ -40,7 +40,16 @@ export default function SettingsModal({
               mode === 'doubles' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
             }`}
           >
-            Doppel
+            2v2
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('2v1')}
+            className={`flex-1 rounded-md py-2 text-sm ${
+              mode === '2v1' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
+            }`}
+          >
+            2v1
           </button>
           <button
             type="button"
@@ -49,7 +58,7 @@ export default function SettingsModal({
               mode === 'singles' ? 'bg-pitch text-white font-semibold' : 'text-ink2'
             }`}
           >
-            Einzel
+            1v1
           </button>
         </div>
       </div>
@@ -108,6 +117,15 @@ export default function SettingsModal({
           </button>
         </div>
       </div>
+
+      {settingsQ.data && (
+        <div className="mb-4 flex items-center justify-between rounded-lg bg-paper px-3 py-2 ring-1 ring-line">
+          <span className="text-sm text-ink2">2v1 Ausgleich</span>
+          <span className="text-sm font-semibold tabular-nums">
+            {Math.round(settingsQ.data.twovone_penalty)} Elo
+          </span>
+        </div>
+      )}
 
       {canSaveDefault && (
         <div className="-mx-5 -mb-[calc(env(safe-area-inset-bottom)+1.25rem)] mt-4 rounded-b-2xl bg-accent/10 px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 ring-1 ring-inset ring-accent/20 sm:rounded-b-2xl">

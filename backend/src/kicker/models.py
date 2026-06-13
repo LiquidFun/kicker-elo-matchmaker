@@ -95,12 +95,14 @@ class Match(Base):
         ForeignKey("organizations.id", ondelete="RESTRICT"), default=1, index=True
     )
 
+    penalty_before: Mapped[float | None] = mapped_column(nullable=True)
+
     players: Mapped[list["MatchPlayer"]] = relationship(
         back_populates="match", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
-        CheckConstraint("mode IN ('doubles', 'singles')", name="mode_valid"),
+        CheckConstraint("mode IN ('doubles', 'singles', '2v1')", name="mode_valid"),
         CheckConstraint("winner_team IN (1, 2)", name="winner_team_valid"),
     )
 
@@ -114,8 +116,8 @@ class MatchPlayer(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True
     )
+    position: Mapped[str] = mapped_column(String(16), primary_key=True)
     team: Mapped[int] = mapped_column(Integer)
-    position: Mapped[str] = mapped_column(String(16))
     rating_before: Mapped[float] = mapped_column()
     rating_after: Mapped[float] = mapped_column()
     rating_delta: Mapped[float] = mapped_column()

@@ -99,10 +99,11 @@ export default function StatsPage() {
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
       {globalQ.data && (
-        <div className="grid shrink-0 grid-cols-3 gap-2 px-3 py-3 text-center text-xs">
+        <div className="grid shrink-0 grid-cols-4 gap-2 px-3 py-3 text-center text-xs">
           <Stat label="Spiele" value={globalQ.data.total_matches} to="/stats/games" />
-          <Stat label="Doppel" value={globalQ.data.doubles_matches} to="/stats/games?mode=doubles" />
-          <Stat label="Einzel" value={globalQ.data.singles_matches} to="/stats/games?mode=singles" />
+          <Stat label="2v2" value={globalQ.data.doubles_matches} to="/stats/games?mode=doubles" />
+          <Stat label="2v1" value={globalQ.data.twovone_matches} to="/stats/games?mode=2v1" />
+          <Stat label="1v1" value={globalQ.data.singles_matches} to="/stats/games?mode=singles" />
         </div>
       )}
 
@@ -663,9 +664,10 @@ function buildProgressionSeries(
   if (activePlayers.length === 0) return [];
   if (mode === 'doubles') return buildDoublesAverageSeries(activePlayers, matches);
 
-  const matchMode = mode === 'singles' ? 'singles' : 'doubles';
   const relevant = matches
-    .filter((m) => m.mode === matchMode)
+    .filter((m) =>
+      mode === 'singles' ? m.mode === 'singles' : m.mode === 'doubles' || m.mode === '2v1',
+    )
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   const current: Record<string, number> = {};
@@ -710,7 +712,7 @@ function buildProgressionSeries(
 
 function buildDoublesAverageSeries(activePlayers: User[], matches: Match[]): ProgressionPoint[] {
   const relevant = matches
-    .filter((m) => m.mode === 'doubles')
+    .filter((m) => m.mode === 'doubles' || m.mode === '2v1')
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   const att: Record<string, number> = {};

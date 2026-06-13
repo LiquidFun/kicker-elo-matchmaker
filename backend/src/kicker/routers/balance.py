@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import auth, elo, models, schemas
 from ..db import get_db
+from .settings_router import get_twovone_penalty
 
 router = APIRouter(prefix="/api", tags=["balance"])
 
@@ -45,6 +46,15 @@ def _lineup_to_schema(lu: elo.Lineup) -> schemas.LineupOut:
     )
 
 
+def _twovone_lineup_to_schema(lu: elo.TwoVsOneLineupSummary) -> schemas.TwoVsOneLineupOut:
+    return schemas.TwoVsOneLineupOut(
+        team1_attacker=lu.team1_attacker,
+        team1_defender=lu.team1_defender,
+        solo=lu.solo,
+        win_prob_team1=lu.win_prob_team1,
+    )
+
+
 @router.post("/balance")
 def balance(
     payload: schemas.BalanceIn,
@@ -66,6 +76,28 @@ def balance(
     )
 
 
+@router.post("/balance/2v1")
+def balance_twovone(
+    payload: schemas.TwoVsOneBalanceIn,
+    org_id: int = Depends(auth.get_org_id_public),
+    db: Session = Depends(get_db),
+) -> schemas.TwoVsOneBalanceOut:
+    if len(set(payload.player_ids)) != 3:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Need 3 distinct players")
+    users = _load_players(db, payload.player_ids)
+    if any(u.organization_id != org_id for u in users.values()):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "All players must belong to the same organization"
+        )
+    penalty = get_twovone_penalty(db, org_id)
+    ratings = _to_ratings([users[i] for i in payload.player_ids])
+    best, alternatives = elo.best_balanced_twovone_lineup(ratings, penalty)
+    return schemas.TwoVsOneBalanceOut(
+        best=_twovone_lineup_to_schema(best),
+        alternatives=[_twovone_lineup_to_schema(lu) for lu in alternatives],
+    )
+
+
 @router.post("/preview")
 def preview(
     payload: schemas.PreviewIn,
@@ -79,6 +111,8 @@ def preview(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Doubles requires 4 players")
     if payload.mode == "singles" and len(ids) != 2:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Singles requires 2 players")
+    if payload.mode == "2v1" and len(ids) != 3:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "2v1 requires 3 players")
 
     users = _load_players(db, ids)
     if any(u.organization_id != org_id for u in users.values()):
@@ -98,6 +132,7 @@ def preview(
         for uid, u in users.items()
     }
 
+    lineup: elo.DoublesLineup | elo.SinglesLineup | elo.TwoVsOneLineup
     if payload.mode == "doubles":
         slots: dict[tuple[int, str], elo.PlayerRatings] = {}
         for p in payload.players:
@@ -108,6 +143,26 @@ def preview(
                 team1_defender=slots[(1, "defender")],
                 team2_attacker=slots[(2, "attacker")],
                 team2_defender=slots[(2, "defender")],
+            )
+        except KeyError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Missing slot: {e}") from e
+    elif payload.mode == "2v1":
+        penalty = get_twovone_penalty(db, org_id)
+        by_slot: dict[tuple[int, str], elo.PlayerRatings] = {}
+        solo_player: elo.PlayerRatings | None = None
+        for p in payload.players:
+            if p.position == "solo":
+                solo_player = ratings[p.user_id]
+            else:
+                by_slot[(p.team, p.position)] = ratings[p.user_id]
+        if solo_player is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "2v1 needs one solo player")
+        try:
+            lineup = elo.TwoVsOneLineup(
+                team1_attacker=by_slot[(1, "attacker")],
+                team1_defender=by_slot[(1, "defender")],
+                solo=solo_player,
+                penalty=penalty,
             )
         except KeyError as e:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Missing slot: {e}") from e

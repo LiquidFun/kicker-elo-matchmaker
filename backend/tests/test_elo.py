@@ -9,14 +9,18 @@ from kicker.elo import (
     DoublesLineup,
     PlayerRatings,
     SinglesLineup,
+    TwoVsOneLineup,
     best_balanced_lineup,
+    best_balanced_twovone_lineup,
     compute_delta,
     doubles_deltas,
     enumerate_doubles_lineups,
+    enumerate_twovone_lineups,
     expected_score,
     k_for_games,
     preview_outcomes,
     singles_deltas,
+    twovone_deltas,
 )
 
 
@@ -218,3 +222,62 @@ def test_realistic_rating_progression():
         rb -= d
     assert ra > 1000 and rb < 1000
     assert ra + rb == pytest.approx(2000.0)  # exact zero-sum preserved
+
+
+# ---------------------------------------------------------------------------
+# 2v1 mode
+# ---------------------------------------------------------------------------
+
+
+def test_twovone_deltas_solo_gets_two_positions():
+    lineup = TwoVsOneLineup(pr(1), pr(2), pr(3), penalty=50.0)
+    deltas, _ = twovone_deltas(lineup, 5, 2)
+    assert (3, "attacker") in deltas
+    assert (3, "defender") in deltas
+    # Pair gets one entry each
+    assert (1, "attacker") in deltas
+    assert (2, "defender") in deltas
+
+
+def test_twovone_penalty_increases_when_pair_wins():
+    lineup = TwoVsOneLineup(pr(1), pr(2), pr(3), penalty=50.0)
+    _, penalty_delta = twovone_deltas(lineup, 5, 0)
+    assert penalty_delta > 0
+
+
+def test_twovone_penalty_decreases_when_solo_wins():
+    lineup = TwoVsOneLineup(pr(1), pr(2), pr(3), penalty=50.0)
+    _, penalty_delta = twovone_deltas(lineup, 0, 5)
+    assert penalty_delta < 0
+
+
+def test_twovone_solo_total_delta_comparable_to_pair_individual():
+    lineup = TwoVsOneLineup(pr(1), pr(2), pr(3), penalty=0.0)
+    deltas, _ = twovone_deltas(lineup, 5, 3)
+    solo_total = abs(deltas[(3, "attacker")] + deltas[(3, "defender")])
+    pair_individual = abs(deltas[(1, "attacker")])
+    # Solo total should be roughly equal to one pair member (same K, ~same diff).
+    assert solo_total == pytest.approx(pair_individual, rel=0.01)
+
+
+def test_enumerate_twovone_lineups_count():
+    players = [pr(1), pr(2), pr(3)]
+    lineups = enumerate_twovone_lineups(players, 50.0)
+    assert len(lineups) == 6  # 3 solo choices × 2 pair orderings
+
+
+def test_best_balanced_twovone_lineup_is_fairest():
+    players = [pr(1, a=1200, d=1100), pr(2, a=900, d=1000), pr(3, a=1050, d=1050)]
+    best, alternatives = best_balanced_twovone_lineup(players, 50.0)
+    for alt in alternatives:
+        assert abs(best.win_prob_team1 - 0.5) <= abs(alt.win_prob_team1 - 0.5) + 1e-9
+
+
+def test_twovone_preview_outcomes():
+    lineup = TwoVsOneLineup(pr(1), pr(2), pr(3, a=1100, d=1100), penalty=50.0)
+    win_prob, outcomes = preview_outcomes(lineup, goals_to_win=5)
+    assert 0 < win_prob < 1
+    assert len(outcomes) == 10
+    for _, _, per_user in outcomes:
+        # Solo player aggregated into one entry
+        assert 3 in per_user

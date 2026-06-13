@@ -127,6 +127,11 @@ def global_stats(
         .filter(models.Match.mode == "singles", models.Match.organization_id == org_id)
         .count()
     )
+    twovone = (
+        db.query(models.Match)
+        .filter(models.Match.mode == "2v1", models.Match.organization_id == org_id)
+        .count()
+    )
     active_users = (
         db.query(models.User)
         .filter(
@@ -138,8 +143,9 @@ def global_stats(
         .count()
     )
     return {
-        "total_matches": doubles + singles,
+        "total_matches": doubles + singles + twovone,
         "doubles_matches": doubles,
         "singles_matches": singles,
+        "twovone_matches": twovone,
         "active_players": active_users,
     }

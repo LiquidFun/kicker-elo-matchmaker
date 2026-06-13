@@ -18,6 +18,24 @@ function pitchOrder(pos: Position, team: 1 | 2): number {
   return pos === 'attacker' ? 0 : 1;
 }
 
+/** Group match_player entries by user_id, summing deltas (for 2v1 solo player). */
+function groupSoloEntries(players: MatchPlayer[]): MatchPlayer[] {
+  const seen = new Map<number, MatchPlayer>();
+  for (const p of players) {
+    const existing = seen.get(p.user_id);
+    if (existing) {
+      seen.set(p.user_id, {
+        ...existing,
+        position: 'attacker', // display position doesn't matter, we show 'Solo' for 2v1
+        rating_delta: existing.rating_delta + p.rating_delta,
+      });
+    } else {
+      seen.set(p.user_id, { ...p });
+    }
+  }
+  return Array.from(seen.values());
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -41,9 +59,12 @@ export default function MatchCard({
   const team1 = match.players
     .filter((p) => p.team === 1)
     .sort((a, b) => pitchOrder(a.position, 1) - pitchOrder(b.position, 1));
-  const team2 = match.players
+  const team2Raw = match.players
     .filter((p) => p.team === 2)
     .sort((a, b) => pitchOrder(a.position, 2) - pitchOrder(b.position, 2));
+  // For 2v1 matches, the solo player has two entries (attacker+defender).
+  // Group them into one display entry with combined delta.
+  const team2 = groupSoloEntries(team2Raw);
   const displayDate = date ?? formatTime(match.created_at);
 
   return (
@@ -54,7 +75,7 @@ export default function MatchCard({
         }`}
       />
       <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-ink2">
-        <span>{match.mode === 'doubles' ? 'Doppel' : 'Einzel'}</span>
+        <span>{match.mode === 'doubles' ? '2v2' : match.mode === '2v1' ? '2v1' : '1v1'}</span>
         <span className="flex items-center gap-2">
           <span>{displayDate}</span>
           {onDelete && (

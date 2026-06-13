@@ -7,6 +7,7 @@ export const expectedScore = (ratingA: number, ratingB: number): number =>
 const slotRating = (user: User, slot: SlotKey): number => {
   if (slot.endsWith('.attacker')) return user.rating_attacker;
   if (slot.endsWith('.defender')) return user.rating_defender;
+  if (slot.endsWith('.solo')) return (user.rating_attacker + user.rating_defender) / 2;
   return user.rating_singles;
 };
 
@@ -16,7 +17,7 @@ export const teamRating = (
   team: 1 | 2,
   mode: Mode,
 ): number | null => {
-  if (mode === 'doubles') {
+  if (mode === 'doubles' || (mode === '2v1' && team === 1)) {
     const aId = slots[`team${team}.attacker` as SlotKey];
     const dId = slots[`team${team}.defender` as SlotKey];
     if (aId == null || dId == null) return null;
@@ -24,6 +25,13 @@ export const teamRating = (
     const d = users[dId];
     if (!a || !d) return null;
     return (a.rating_attacker + d.rating_defender) / 2;
+  }
+  if (mode === '2v1' && team === 2) {
+    const id = slots['team2.solo'];
+    if (id == null) return null;
+    const u = users[id];
+    if (!u) return null;
+    return (u.rating_attacker + u.rating_defender) / 2;
   }
   const id = slots[`team${team}.singles` as SlotKey];
   if (id == null) return null;

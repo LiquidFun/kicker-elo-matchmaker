@@ -18,9 +18,10 @@ import {
   useMatches,
   usePreview,
   useSettings,
+  useTwoVsOneBalance,
   useUsers,
 } from '../api/hooks';
-import type { Lineup, MatchPlayerInput, Mode, User } from '../api/types';
+import type { Lineup, MatchPlayerInput, Mode, TwoVsOneLineup, User } from '../api/types';
 import Modal from '../components/Modal';
 import Avatar from './Avatar';
 import RosterTile from './RosterTile';
@@ -36,9 +37,10 @@ import {
   useMatchStore,
 } from './store';
 
-function slotPosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' {
+function slotPosition(slot: SlotKey): 'attacker' | 'defender' | 'singles' | 'solo' {
   if (slot.endsWith('.attacker')) return 'attacker';
   if (slot.endsWith('.defender')) return 'defender';
+  if (slot.endsWith('.solo')) return 'solo';
   return 'singles';
 }
 
@@ -62,6 +64,13 @@ function buildMatchupSentence(
     const a = name(`team${first}.singles`);
     const b = name(`team${other}.singles`);
     return a && b ? `${a} gegen ${b}` : null;
+  }
+  if (mode === '2v1') {
+    const att = name('team1.attacker');
+    const def = name('team1.defender');
+    const solo = name('team2.solo');
+    if (!att || !def || !solo) return null;
+    return `${att} mit ${def} gegen ${solo}`;
   }
   const fa = name(`team${first}.attacker`);
   const fd = name(`team${first}.defender`);
@@ -106,6 +115,7 @@ export default function MatchBuilderPage() {
   const usersQ = useUsers();
   const settingsQ = useSettings();
   const balance = useBalance();
+  const balance2v1 = useTwoVsOneBalance();
   const canManage = useCanManage();
   const mode = useMatchStore((s) => s.mode);
   const slots = useMatchStore((s) => s.slots);
@@ -243,6 +253,25 @@ export default function MatchBuilderPage() {
   }, [mode, armed]);
 
   function onBalance() {
+    if (mode === '2v1') {
+      const ids = slotsForMode('2v1')
+        .map((k) => slots[k])
+        .filter((v): v is number => v != null);
+      if (ids.length !== 3) return;
+      balance2v1.mutate(
+        { player_ids: ids },
+        {
+          onSuccess: (data) => {
+            setLineup({
+              'team1.attacker': data.best.team1_attacker,
+              'team1.defender': data.best.team1_defender,
+              'team2.solo': data.best.solo,
+            });
+          },
+        },
+      );
+      return;
+    }
     const ids = slotsForMode('doubles')
       .map((k) => slots[k])
       .filter((v): v is number => v != null);
@@ -263,6 +292,17 @@ export default function MatchBuilderPage() {
   }
 
   function onBalanceLongPress() {
+    if (mode === '2v1') {
+      const ids = slotsForMode('2v1')
+        .map((k) => slots[k])
+        .filter((v): v is number => v != null);
+      if (ids.length !== 3) return;
+      balance2v1.mutate(
+        { player_ids: ids },
+        { onSuccess: () => setAllLineupsOpen(true) },
+      );
+      return;
+    }
     const ids = slotsForMode('doubles')
       .map((k) => slots[k])
       .filter((v): v is number => v != null);
@@ -279,6 +319,15 @@ export default function MatchBuilderPage() {
       'team1.defender': lu.team1_defender,
       'team2.attacker': lu.team2_attacker,
       'team2.defender': lu.team2_defender,
+    });
+    setAllLineupsOpen(false);
+  }
+
+  function selectTwoVsOneLineup(lu: TwoVsOneLineup) {
+    setLineup({
+      'team1.attacker': lu.team1_attacker,
+      'team1.defender': lu.team1_defender,
+      'team2.solo': lu.solo,
     });
     setAllLineupsOpen(false);
   }
@@ -301,7 +350,10 @@ export default function MatchBuilderPage() {
   const complete = isLineupComplete(slots, mode);
   const winProb = winProbTeam1(usersById, slots, mode);
   const team1Rating = teamRating(usersById, slots, 1, mode);
-  const team2Rating = teamRating(usersById, slots, 2, mode);
+  const team2RatingRaw = teamRating(usersById, slots, 2, mode);
+  const twovonePenalty = settingsQ.data?.twovone_penalty ?? 50;
+  const team2Rating =
+    mode === '2v1' && team2RatingRaw != null ? team2RatingRaw - twovonePenalty : team2RatingRaw;
   // "balanced" = this arrangement is the fairest split of the 4 selected
   // players (i.e. the balance button can't improve it). For singles there
   // are only two ways to assign sides, both with the same |p − 0.5|, so the
@@ -309,7 +361,9 @@ export default function MatchBuilderPage() {
   const isBalanced =
     mode === 'singles'
       ? winProb !== null
-      : isOptimalDoublesLineup(usersById, slots);
+      : mode === '2v1'
+        ? winProb !== null
+        : isOptimalDoublesLineup(usersById, slots);
   // Kicker convention: the weaker team gets the initial kickoff.
   const ballTeam: 1 | 2 | null =
     team1Rating == null || team2Rating == null || team1Rating === team2Rating
@@ -334,10 +388,11 @@ export default function MatchBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (mode !== 'doubles' || !complete) return;
+    if (mode !== 'doubles' && mode !== '2v1') return;
+    if (!complete) return;
     if (lastInteractionRef.current !== 'tap') return;
-    if (balance.isPending) return;
-    const ids = slotsForMode('doubles')
+    if (balance.isPending || balance2v1.isPending) return;
+    const ids = slotsForMode(mode)
       .map((k) => slots[k])
       .filter((v): v is number => v != null)
       .slice()
@@ -347,7 +402,7 @@ export default function MatchBuilderPage() {
     lastAutoBalancedIds.current = ids;
     onBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complete, mode, slots, balance.isPending]);
+  }, [complete, mode, slots, balance.isPending, balance2v1.isPending]);
 
   // Score preview & commit ----------------------------------------------------
   const players: MatchPlayerInput[] = useMemo(
@@ -447,9 +502,10 @@ export default function MatchBuilderPage() {
           ballTeam={ballTeam}
           isBalanced={isBalanced}
           canBalance={
-            mode === 'doubles' && slotsForMode('doubles').every((k) => slots[k] != null)
+            (mode === 'doubles' || mode === '2v1') &&
+            slotsForMode(mode).every((k) => slots[k] != null)
           }
-          isBalancing={balance.isPending}
+          isBalancing={balance.isPending || balance2v1.isPending}
           onBalance={onBalance}
           onBalanceLongPress={onBalanceLongPress}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -463,6 +519,7 @@ export default function MatchBuilderPage() {
           team2Score={team2Score}
           isCommitting={commit.isPending}
           onCommit={commitMatch}
+          penalty={settingsQ.data?.twovone_penalty}
         />
 
         {commit.isError && (
@@ -508,17 +565,32 @@ export default function MatchBuilderPage() {
         setMode={setMode}
       />
 
-      <AllLineupsModal
-        open={allLineupsOpen}
-        onClose={() => setAllLineupsOpen(false)}
-        lineups={
-          balance.data
-            ? [balance.data.best, ...balance.data.alternatives]
-            : []
-        }
-        usersById={usersById}
-        onSelect={selectLineup}
-      />
+      {mode === '2v1' ? (
+        <AllTwoVsOneLineupsModal
+          open={allLineupsOpen}
+          onClose={() => setAllLineupsOpen(false)}
+          lineups={
+            balance2v1.data
+              ? [balance2v1.data.best, ...balance2v1.data.alternatives]
+              : []
+          }
+          usersById={usersById}
+          penalty={settingsQ.data?.twovone_penalty ?? 50}
+          onSelect={selectTwoVsOneLineup}
+        />
+      ) : (
+        <AllLineupsModal
+          open={allLineupsOpen}
+          onClose={() => setAllLineupsOpen(false)}
+          lineups={
+            balance.data
+              ? [balance.data.best, ...balance.data.alternatives]
+              : []
+          }
+          usersById={usersById}
+          onSelect={selectLineup}
+        />
+      )}
     </div>
     </DndContext>
   );
@@ -554,6 +626,7 @@ function Pitch({
   team2Score,
   isCommitting,
   onCommit,
+  penalty,
 }: {
   mode: Mode;
   slots: Record<SlotKey, number | null>;
@@ -586,6 +659,7 @@ function Pitch({
   team2Score: number;
   isCommitting: boolean;
   onCommit: () => void;
+  penalty?: number;
 }) {
   const balanceBg = !canBalance
     ? 'bg-surface text-ink2 ring-line'
@@ -628,7 +702,7 @@ function Pitch({
             onSlotTap={onSlotTap}
           />
           <div className="flex w-20 shrink-0 flex-col items-center py-8 md:w-32">
-            {mode === 'doubles' && (
+            {(mode === 'doubles' || mode === '2v1') && (
               <BalanceButton
                 canBalance={canBalance}
                 isBalancing={isBalancing}
@@ -688,6 +762,7 @@ function Pitch({
             isWinner={loserTeam === 1}
             hasBall={ballTeam === 2}
             onSlotTap={onSlotTap}
+            penalty={mode === '2v1' ? penalty : undefined}
           />
         </div>
 
@@ -835,6 +910,7 @@ function TeamColumn({
   isWinner,
   hasBall,
   onSlotTap,
+  penalty,
 }: {
   team: 1 | 2;
   mode: Mode;
@@ -845,15 +921,20 @@ function TeamColumn({
   isWinner: boolean;
   hasBall: boolean;
   onSlotTap: (slot: SlotKey) => void;
+  penalty?: number;
 }) {
   const keys: SlotKey[] =
     mode === 'doubles'
       ? team === 1
         ? ['team1.defender', 'team1.attacker']
         : ['team2.attacker', 'team2.defender']
-      : team === 1
-        ? ['team1.singles']
-        : ['team2.singles'];
+      : mode === '2v1'
+        ? team === 1
+          ? ['team1.defender', 'team1.attacker']
+          : ['team2.solo']
+        : team === 1
+          ? ['team1.singles']
+          : ['team2.singles'];
 
   return (
     <div className="relative flex flex-1 flex-col gap-2">
@@ -877,6 +958,7 @@ function TeamColumn({
             mode={mode}
             armed={armed === key}
             onTap={() => onSlotTap(key)}
+            penalty={key === 'team2.solo' ? penalty : undefined}
           />
         </div>
       ))}
@@ -1129,17 +1211,88 @@ function AllLineupsModal({
   );
 }
 
+function AllTwoVsOneLineupsModal({
+  open,
+  onClose,
+  lineups,
+  usersById,
+  penalty,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  lineups: TwoVsOneLineup[];
+  usersById: Record<number, User>;
+  penalty: number;
+  onSelect: (lu: TwoVsOneLineup) => void;
+}) {
+  function player(id: number) {
+    return usersById[id] ?? null;
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Alle Aufstellungen (2v1)">
+      <ul className="-mx-1 max-h-[70vh] space-y-1 overflow-y-auto">
+        {lineups.map((lu, i) => {
+          const att = player(lu.team1_attacker);
+          const def = player(lu.team1_defender);
+          const solo = player(lu.solo);
+          const r1 = ((att?.rating_attacker ?? 0) + (def?.rating_defender ?? 0)) / 2;
+          const r2 = ((solo?.rating_attacker ?? 0) + (solo?.rating_defender ?? 0)) / 2 - penalty;
+          const diff = Math.round(r1 - r2);
+          const absDiff = Math.abs(diff);
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onSelect(lu)}
+                className={`w-full rounded-xl bg-paper p-2.5 text-left ring-1 transition-colors active:bg-surface ${
+                  i === 0 ? 'ring-pitch/40' : 'ring-line hover:bg-surface'
+                }`}
+              >
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    <PlayerRow user={def} pos="defender" align="right" />
+                    <PlayerRow user={att} pos="attacker" align="right" />
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`text-xs font-bold tabular-nums ${
+                        absDiff < 30 ? 'text-pitch' : 'text-accent'
+                      }`}
+                    >
+                      {diff > 0 ? `◀ ${absDiff}` : diff < 0 ? `${absDiff} ▶` : `= ${absDiff}`}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-start gap-0.5">
+                    <PlayerRow user={solo} pos="attacker" align="left" label="Solo" />
+                    <span className="text-[10px] tabular-nums text-accent">
+                      −{Math.round(penalty)} Ausgleich
+                    </span>
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Modal>
+  );
+}
+
 function PlayerRow({
   user,
   pos,
   align,
+  label,
 }: {
   user: User | null;
   pos: 'attacker' | 'defender';
   align: 'left' | 'right';
+  label?: string;
 }) {
   if (!user) return <div className="text-sm text-ink2">?</div>;
-  const icon = pos === 'attacker' ? '⚔' : '🛡';
+  const icon = label ?? (pos === 'attacker' ? '⚔' : '🛡');
   const rating = Math.round(pos === 'attacker' ? user.rating_attacker : user.rating_defender);
   return (
     <div
@@ -1160,6 +1313,7 @@ const SLOT_HINT: Record<SlotKey, string> = {
   'team2.defender': 'Team 2 🛡',
   'team1.singles': 'Team 1',
   'team2.singles': 'Team 2',
+  'team2.solo': 'Solo',
 };
 
 // Match the responsive grid below: cols at each Tailwind breakpoint.

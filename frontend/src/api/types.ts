@@ -1,6 +1,7 @@
 export type Role = 'admin' | 'moderator' | 'user';
-export type Mode = 'doubles' | 'singles';
+export type Mode = 'doubles' | 'singles' | '2v1';
 export type Position = 'attacker' | 'defender' | 'singles';
+export type InputPosition = Position | 'solo';
 
 export interface User {
   id: number;
@@ -52,7 +53,7 @@ export interface MatchList {
 export interface MatchPlayerInput {
   user_id: number;
   team: 1 | 2;
-  position: Position;
+  position: InputPosition;
 }
 
 export interface Lineup {
@@ -68,6 +69,18 @@ export interface BalanceResult {
   alternatives: Lineup[];
 }
 
+export interface TwoVsOneLineup {
+  team1_attacker: number;
+  team1_defender: number;
+  solo: number;
+  win_prob_team1: number;
+}
+
+export interface TwoVsOneBalanceResult {
+  best: TwoVsOneLineup;
+  alternatives: TwoVsOneLineup[];
+}
+
 export interface PreviewOutcome {
   team1_score: number;
   team2_score: number;
@@ -81,6 +94,7 @@ export interface PreviewResult {
 
 export interface Settings {
   default_goals_to_win: number;
+  twovone_penalty: number;
 }
 
 export interface RatingHistoryPoint {
@@ -115,6 +129,7 @@ export interface GlobalStats {
   total_matches: number;
   doubles_matches: number;
   singles_matches: number;
+  twovone_matches: number;
   active_players: number;
 }
 

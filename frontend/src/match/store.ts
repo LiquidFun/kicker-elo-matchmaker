@@ -7,7 +7,8 @@ export type SlotKey =
   | 'team2.attacker'
   | 'team2.defender'
   | 'team1.singles'
-  | 'team2.singles';
+  | 'team2.singles'
+  | 'team2.solo';
 
 export const DOUBLES_SLOTS: SlotKey[] = [
   'team1.attacker',
@@ -16,9 +17,18 @@ export const DOUBLES_SLOTS: SlotKey[] = [
   'team2.defender',
 ];
 export const SINGLES_SLOTS: SlotKey[] = ['team1.singles', 'team2.singles'];
+export const TWO_VS_ONE_SLOTS: SlotKey[] = [
+  'team1.attacker',
+  'team1.defender',
+  'team2.solo',
+];
 
 export const slotsForMode = (mode: Mode): SlotKey[] =>
-  mode === 'doubles' ? DOUBLES_SLOTS : SINGLES_SLOTS;
+  mode === 'doubles'
+    ? DOUBLES_SLOTS
+    : mode === '2v1'
+      ? TWO_VS_ONE_SLOTS
+      : SINGLES_SLOTS;
 
 interface MatchState {
   mode: Mode;
@@ -47,6 +57,7 @@ const emptySlots: Record<SlotKey, number | null> = {
   'team2.defender': null,
   'team1.singles': null,
   'team2.singles': null,
+  'team2.solo': null,
 };
 
 export const findSlotOfPlayer = (
